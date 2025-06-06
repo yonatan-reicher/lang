@@ -1,5 +1,5 @@
 use crate::ast::{Program, Statement};
-use crate::eval::Context;
+use crate::context::Context;
 
 impl Statement {
     pub fn execute(&self, context: &mut Context) {
@@ -28,8 +28,8 @@ impl Program {
 mod tests {
     use super::*;
     use crate::ast::Expr;
-    use crate::eval::PrintOutput;
     use crate::value::Value;
+    use crate::context::PrintOutput;
 
     #[test]
     fn statments() {
