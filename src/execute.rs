@@ -10,7 +10,7 @@ impl Statement {
             }
             Statement::Print(expr) => {
                 let value = expr.eval(context);
-                println!("{:?}", value);
+                context.out.print(&value);
             }
         }
     }
@@ -27,19 +27,25 @@ impl Program {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::Value;
     use crate::ast::Expr;
+    use crate::eval::PrintOutput;
+    use crate::value::Value;
 
     #[test]
     fn statments() {
         let s1 = Statement::Assignment("x".to_string(), Expr::Int(100));
         let s2 = Statement::Print(Expr::Var("x".to_string()));
+
+        let out = Default::default();
         let mut context = Context {
             vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
+            out: PrintOutput::Vec(std::rc::Rc::clone(&out)),
         };
-        s1.execute(&mut context);
-        s2.execute(&mut context);
+
+        s1.execute(&mut context); // x = 100;
+        s2.execute(&mut context); // print x;
         assert_eq!(context.vars.get("x"), Some(&Value::Int(100)));
+        assert_eq!(out.borrow().as_ref(), [Value::Int(100)]);
     }
 
     #[test]
@@ -52,11 +58,14 @@ mod tests {
             statement: vec![
                 Assignment("x".to_string(), Int(10)),
                 Assignment("y".to_string(), Str("10".into())),
-                Assignment("x".to_string(), BinOp(
-                    BinOp(Var("x".into()).into(), Eq, Var("y".into()).into()).into(),
-                    And,
-                    Var("x".to_string()).into(),
-                )),
+                Assignment(
+                    "x".to_string(),
+                    BinOp(
+                        BinOp(Var("x".into()).into(), Eq, Var("y".into()).into()).into(),
+                        And,
+                        Var("x".to_string()).into(),
+                    ),
+                ),
             ],
         };
         let mut context = Context::default();

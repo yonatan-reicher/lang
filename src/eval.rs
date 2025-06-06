@@ -1,9 +1,28 @@
 use crate::ast::{Expr, BinOp};
 use crate::value::Value;
 
+#[derive(Debug, Default, Clone, PartialEq)]
+pub enum PrintOutput {
+    #[default]
+    Stdout,
+    Ignore,
+    Vec(std::rc::Rc<std::cell::RefCell<Vec<Value>>>),
+}
+
+impl PrintOutput {
+    pub fn print(&self, value: &Value) {
+        match self {
+            PrintOutput::Stdout => println!("{:?}", value),
+            PrintOutput::Ignore => (),
+            PrintOutput::Vec(vec) => vec.borrow_mut().push(value.clone()),
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct Context {
     pub vars: std::collections::HashMap<String, Value>,
+    pub out: PrintOutput,
 }
 
 impl Expr {
@@ -67,6 +86,7 @@ mod tests {
     fn getting_a_variable() {
         let context = Context {
             vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
+            out: PrintOutput::Ignore,
         };
         let expr = Expr::Var("x".to_string());
         assert_eq!(expr.eval(&context), Value::Int(42));
