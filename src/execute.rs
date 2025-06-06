@@ -1,4 +1,4 @@
-use crate::ast::{Statement, Program};
+use crate::ast::{Program, Statement};
 use crate::eval::Context;
 
 impl Statement {
