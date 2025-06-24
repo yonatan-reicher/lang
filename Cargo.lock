@@ -21,15 +21,16 @@ checksum = "f4c7245a08504955605670dbf141fceab975f15ca21570696aebe9d2e71576bd"
 name = "lang"
 version = "0.1.0"
 dependencies = [
+ "indoc",
  "nessie-parse",
  "thiserror",
 ]
 
 [[package]]
 name = "nessie-parse"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b53a143dd90159951b1af973c82323bb7a0529bd92be878b552e84149597f474"
+checksum = "6b30fbfaa7cf5a984be639b2cb79d332574f964194fa91e31df5cb29628b4004"
 dependencies = [
  "functionality",
  "indoc",
