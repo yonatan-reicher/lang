@@ -1,11 +1,15 @@
 //! This module is responsible for parsing from source code to AST.
 
-use crate::ast::Expr;
-use nessie_parse::one_of;
+use crate::ast::{BinOp, Expr};
+use indoc::indoc;
+use nessie_parse::{ParseResult, Pos, one_of};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq)]
-pub enum Error {}
+pub enum Error {
+    #[error("Unclosed parenthesis")]
+    UnclosedParen,
+}
 
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
 
@@ -30,6 +34,9 @@ enum Token {
     Comma,
     Plus,
     Eq,
+    Print,
+    LParen,
+    RParen,
 }
 
 fn identifier_or_keyword<'a>() -> Parser<'a, Token> {
@@ -55,11 +62,14 @@ fn identifier_or_keyword<'a>() -> Parser<'a, Token> {
             })
         })
         // Keywords should be added here!
-        .map(Token::Ident)
+        .map(|ident| match ident.as_str() {
+            "print" => Token::Print,
+            _ => Token::Ident(ident),
+        })
 }
 
 fn symbol<'a>(s: &'static str, ret: Token) -> Parser<'a, Token> {
-    Parser::expect_string(";")
+    Parser::expect_string(s)
         .map(move |()| ret.clone())
         .map_fail(|_| ())
 }
@@ -70,9 +80,145 @@ fn token<'a>() -> Parser<'a, Token> {
             symbol(";", Token::Semicolon),
             symbol(":", Token::Colon),
             symbol("=", Token::Eq),
+            symbol(",", Token::Comma),
+            symbol("+", Token::Plus),
+            symbol("(", Token::LParen),
+            symbol(")", Token::RParen),
             identifier_or_keyword(),
             number().map(Token::Number),
         ]
         .map_fail(|_| ())
     })
+}
+
+fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
+    token().filter(move |t1| t1 == &t, ()).map(|_| ())
+}
+
+fn atom<'a>() -> Parser<'a, Expr> {
+    token()
+        .and_then(|token| match token {
+            Token::LParen => {
+                expr().and_then(|expr| {
+                    token_eq(Token::RParen)
+                        .map(move |_| expr.clone())
+                        .or_err(Error::UnclosedParen)
+                })
+            }
+            Token::Number(n) => Parser::ret(Expr::Int(n)),
+            Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
+            _ => Parser::fail(()),
+        })
+}
+
+fn expr<'a>() -> Parser<'a, Expr> {
+    one_of![
+        atom().and_then(|left| {
+            token_eq(Token::Plus)
+                .and_then(move |_| expr())
+                .map(move |right| Expr::BinOp(
+                    Box::new(left.clone()),
+                    BinOp::Add,
+                    Box::new(right),
+                ))
+        }),
+        atom(),
+    ].map_fail(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_number_token() {
+        let res = token().parse(
+            indoc! {r"
+                1234
+            "}
+            .into(),
+        );
+        assert_eq!(
+            res,
+            ParseResult::Ok(
+                Token::Number(1234),
+                Pos {
+                    row: 1,
+                    col: 5,
+                    offset: 4
+                },
+            ),
+        );
+    }
+
+    #[test]
+    fn token_left_paren() {
+        let res = token().parse(
+            indoc! {r"
+                (
+            "}
+            .into(),
+        );
+        assert_eq!(
+            res,
+            ParseResult::Ok(
+                Token::LParen,
+                Pos {
+                    offset: 1,
+                    row: 1,
+                    col: 2,
+                },
+            ),
+        );
+    }
+
+    #[test]
+    fn number_atom() {
+        let res = atom().parse(
+            indoc! {r"
+                3
+            "}
+            .into(),
+        );
+        assert_eq!(
+            res,
+            ParseResult::Ok(
+                Expr::Int(3),
+                Pos {
+                    offset: 1,
+                    row: 1,
+                    col: 2,
+                },
+            ),
+        );
+    }
+
+    #[test]
+    fn test_expr() {
+        let res = expr().parse(
+            indoc! {r"
+                (1 + 2) + 3
+            "}
+            .into(),
+        );
+        assert_eq!(
+            res,
+            ParseResult::Ok(
+                Expr::BinOp(
+                    Box::new(Expr::BinOp(
+                        Box::new(Expr::Int(1)),
+                        BinOp::Add,
+                        Box::new(Expr::Int(2)),
+                    )),
+                    BinOp::Add,
+                    Box::new(Expr::Int(3)),
+                ),
+                Pos {
+                    row: 1,
+                    col: 15,
+                    offset: 14
+                },
+            ),
+        );
+    }
 }
