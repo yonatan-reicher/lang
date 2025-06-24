@@ -59,7 +59,9 @@ fn identifier_or_keyword<'a>() -> Parser<'a, Token> {
 }
 
 fn symbol<'a>(s: &'static str, ret: Token) -> Parser<'a, Token> {
-    Parser::expect_string(";").map(move |()| ret.clone()).map_fail(|_| ())
+    Parser::expect_string(";")
+        .map(move |()| ret.clone())
+        .map_fail(|_| ())
 }
 
 fn token<'a>() -> Parser<'a, Token> {
