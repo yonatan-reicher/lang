@@ -1,7 +1,7 @@
 //! This module is responsible for parsing from source code to AST.
 
-use crate::ast::{BinOp, Expr};
-use nessie_parse::one_of;
+use crate::ast::{BinOp, Expr, Program, Statement};
+use nessie_parse::{ParseResult, one_of};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -94,7 +94,7 @@ fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
     token().filter(move |t1| t1 == &t, ()).map(|_| ())
 }
 
-pub fn atom<'a>() -> Parser<'a, Expr> {
+fn atom<'a>() -> Parser<'a, Expr> {
     token().and_then(|token| match token {
         Token::LParen => expr().and_then(|expr| {
             token_eq(Token::RParen)
@@ -107,7 +107,7 @@ pub fn atom<'a>() -> Parser<'a, Expr> {
     })
 }
 
-pub fn expr<'a>() -> Parser<'a, Expr> {
+fn expr<'a>() -> Parser<'a, Expr> {
     one_of![
         atom().and_then(|left| {
             token_eq(Token::Plus)
@@ -117,6 +117,25 @@ pub fn expr<'a>() -> Parser<'a, Expr> {
         atom(),
     ]
     .map_fail(|_| ())
+}
+
+pub fn parse(text: &str) -> Result<Program, Error> {
+    let state = text.into();
+    match expr().parse(state) {
+        ParseResult::Ok(expr, _) => {
+            Ok(Program {
+                name: "placeholder program name".to_string(),
+                // TODO: Rename to statements
+                statement: vec![Statement::Print(expr)],
+            })
+        }
+        ParseResult::Fail((), _) => {
+            unreachable!(
+                "The main program parser should always either succeed or err, never soft fail."
+            );
+        }
+        ParseResult::Err(err, _) => Err(err),
+    }
 }
 
 #[cfg(test)]
