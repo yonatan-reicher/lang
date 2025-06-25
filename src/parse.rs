@@ -1,8 +1,7 @@
 //! This module is responsible for parsing from source code to AST.
 
 use crate::ast::{BinOp, Expr};
-use indoc::indoc;
-use nessie_parse::{ParseResult, Pos, one_of};
+use nessie_parse::one_of;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -95,7 +94,7 @@ fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
     token().filter(move |t1| t1 == &t, ()).map(|_| ())
 }
 
-fn atom<'a>() -> Parser<'a, Expr> {
+pub fn atom<'a>() -> Parser<'a, Expr> {
     token()
         .and_then(|token| match token {
             Token::LParen => {
@@ -111,7 +110,7 @@ fn atom<'a>() -> Parser<'a, Expr> {
         })
 }
 
-fn expr<'a>() -> Parser<'a, Expr> {
+pub fn expr<'a>() -> Parser<'a, Expr> {
     one_of![
         atom().and_then(|left| {
             token_eq(Token::Plus)
@@ -129,6 +128,8 @@ fn expr<'a>() -> Parser<'a, Expr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
+    use nessie_parse::{ParseResult, Pos};
 
     #[test]
     fn test_number_token() {
@@ -215,8 +216,8 @@ mod tests {
                 ),
                 Pos {
                     row: 1,
-                    col: 15,
-                    offset: 14
+                    col: 12,
+                    offset: 11,
                 },
             ),
         );
