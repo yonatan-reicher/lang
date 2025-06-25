@@ -10,3 +10,9 @@ pub mod context;
 pub mod eval;
 /// Executing programs.
 pub mod execute;
+
+// Re-export
+pub mod prelude {
+    use super::*;
+    pub use parse::parse;
+}
