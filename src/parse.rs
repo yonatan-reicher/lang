@@ -95,19 +95,16 @@ fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
 }
 
 pub fn atom<'a>() -> Parser<'a, Expr> {
-    token()
-        .and_then(|token| match token {
-            Token::LParen => {
-                expr().and_then(|expr| {
-                    token_eq(Token::RParen)
-                        .map(move |_| expr.clone())
-                        .or_err(Error::UnclosedParen)
-                })
-            }
-            Token::Number(n) => Parser::ret(Expr::Int(n)),
-            Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
-            _ => Parser::fail(()),
-        })
+    token().and_then(|token| match token {
+        Token::LParen => expr().and_then(|expr| {
+            token_eq(Token::RParen)
+                .map(move |_| expr.clone())
+                .or_err(Error::UnclosedParen)
+        }),
+        Token::Number(n) => Parser::ret(Expr::Int(n)),
+        Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
+        _ => Parser::fail(()),
+    })
 }
 
 pub fn expr<'a>() -> Parser<'a, Expr> {
@@ -115,14 +112,11 @@ pub fn expr<'a>() -> Parser<'a, Expr> {
         atom().and_then(|left| {
             token_eq(Token::Plus)
                 .and_then(move |_| expr())
-                .map(move |right| Expr::BinOp(
-                    Box::new(left.clone()),
-                    BinOp::Add,
-                    Box::new(right),
-                ))
+                .map(move |right| Expr::BinOp(Box::new(left.clone()), BinOp::Add, Box::new(right)))
         }),
         atom(),
-    ].map_fail(|_| ())
+    ]
+    .map_fail(|_| ())
 }
 
 #[cfg(test)]
