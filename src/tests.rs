@@ -1,0 +1,36 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::context::{Context, PrintOutput};
+use crate::execute_string;
+use crate::prelude::Value;
+use indoc::indoc;
+
+fn default<T: Default>() -> T {
+    Default::default()
+}
+
+#[test]
+fn assigment_and_print() {
+    assert_eq!(
+        execute_string(indoc! {"
+                x = 3
+                print x
+                print x
+            "})
+        .unwrap(),
+        vec![3.into(), 3.into()],
+    );
+}
+
+#[test]
+fn test_function_call() {
+    assert_eq!(
+        execute_string(indoc! {"
+            f = (x => x + 1)
+            print (f 10)
+        "})
+        .unwrap(),
+        vec![11.into()],
+    );
+}

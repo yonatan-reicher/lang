@@ -32,3 +32,6 @@ pub mod prelude {
     pub use context::Context;
     pub use super::execute_string;
 }
+
+#[cfg(test)]
+mod tests;
