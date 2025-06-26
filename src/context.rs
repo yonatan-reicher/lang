@@ -1,6 +1,5 @@
 use crate::value::Value;
 
-
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum PrintOutput {
     #[default]
@@ -24,4 +23,3 @@ pub struct Context {
     pub vars: std::collections::HashMap<String, Value>,
     pub out: PrintOutput,
 }
-
