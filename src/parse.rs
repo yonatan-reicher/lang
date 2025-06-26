@@ -18,18 +18,6 @@ pub enum Error {
 
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
 
-fn number<'a>() -> Parser<'a, i64> {
-    fn vec_to_string(vec: Vec<char>) -> String {
-        vec.iter().cloned().collect()
-    }
-
-    Parser::digit()
-        .map_fail(|_| ())
-        .repeat_1()
-        .map(vec_to_string)
-        .map(|s| s.parse::<i64>().unwrap())
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Token {
     Ident(String),
@@ -42,6 +30,18 @@ enum Token {
     Print,
     LParen,
     RParen,
+}
+
+fn number<'a>() -> Parser<'a, i64> {
+    fn vec_to_string(vec: Vec<char>) -> String {
+        vec.iter().cloned().collect()
+    }
+
+    Parser::digit()
+        .map_fail(|_| ())
+        .repeat_1()
+        .map(vec_to_string)
+        .map(|s| s.parse::<i64>().unwrap())
 }
 
 fn identifier_or_keyword<'a>() -> Parser<'a, Token> {
