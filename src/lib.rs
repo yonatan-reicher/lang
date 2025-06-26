@@ -17,4 +17,5 @@ pub mod prelude {
     pub use parse::parse;
     pub use ast::{Program, Statement, Expr, BinOp};
     pub use value::Value;
+    pub use context::Context;
 }
