@@ -162,7 +162,7 @@ fn statement<'a>() -> Parser<'a, Statement> {
 }
 
 fn statement_but_fails_on_eof<'a>() -> Parser<'a, Statement> {
-    Parser::eof().not().and_then(|()| statement())
+    (Parser::skip_whitespace().and_then(|()| Parser::eof().not())).and_then(|()| statement())
 }
 
 fn program<'a>() -> Parser<'a, Program> {
