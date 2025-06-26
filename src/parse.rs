@@ -8,6 +8,12 @@ use thiserror::Error;
 pub enum Error {
     #[error("Unclosed parenthesis")]
     UnclosedParen,
+    #[error("Print statement expects a single argument (print x)")]
+    PrintStatementExpectsSingleArgument,
+    #[error("Assigment statement expected an expression")]
+    AssignmentStatementExpectsExpression,
+    #[error("Bad statement")]
+    BadStatement,
 }
 
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
@@ -94,6 +100,13 @@ fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
     token().filter(move |t1| t1 == &t, ()).map(|_| ())
 }
 
+fn token_ident<'a>() -> Parser<'a, String> {
+    token().and_then(|token| match token {
+        Token::Ident(ident) => Parser::ret(ident),
+        _ => Parser::fail(()),
+    })
+}
+
 fn atom<'a>() -> Parser<'a, Expr> {
     token().and_then(|token| match token {
         Token::LParen => expr().and_then(|expr| {
@@ -119,16 +132,52 @@ fn expr<'a>() -> Parser<'a, Expr> {
     .map_fail(|_| ())
 }
 
+fn print_statement<'a>() -> Parser<'a, Statement> {
+    token_eq(Token::Print).and_then(|()| {
+        atom()
+            .map(|to_print| Statement::Print(to_print))
+            .or_err(Error::PrintStatementExpectsSingleArgument)
+    })
+}
+
+fn assignment_statement<'a>() -> Parser<'a, Statement> {
+    token_ident().and_then(|ident| {
+        token_eq(Token::Eq).and_then(move |_| {
+            let ident = ident.clone();
+            expr()
+                .or_err(Error::AssignmentStatementExpectsExpression)
+                .map(move |ex| Statement::Assignment(ident.clone(), ex))
+        })
+    })
+}
+
+/// This parser never fails, always returns or errs.
+fn statement<'a>() -> Parser<'a, Statement> {
+    one_of![
+        print_statement(),
+        assignment_statement(),
+        Parser::err(Error::BadStatement)
+    ]
+    .map_fail(|_| unreachable!())
+}
+
+fn statement_but_fails_on_eof<'a>() -> Parser<'a, Statement> {
+    Parser::eof().not().and_then(|()| statement())
+}
+
+fn program<'a>() -> Parser<'a, Program> {
+    statement_but_fails_on_eof()
+        .repeat_0()
+        .map(|statements| Program {
+            name: "placeholder program name".to_string(),
+            statement: statements,
+        })
+}
+
 pub fn parse(text: &str) -> Result<Program, Error> {
     let state = text.into();
-    match expr().parse(state) {
-        ParseResult::Ok(expr, _) => {
-            Ok(Program {
-                name: "placeholder program name".to_string(),
-                // TODO: Rename to statements
-                statement: vec![Statement::Print(expr)],
-            })
-        }
+    match program().parse(state) {
+        ParseResult::Ok(prog, _) => Ok(prog),
         ParseResult::Fail((), _) => {
             unreachable!(
                 "The main program parser should always either succeed or err, never soft fail."

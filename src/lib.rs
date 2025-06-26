@@ -15,4 +15,6 @@ pub mod execute;
 pub mod prelude {
     use super::*;
     pub use parse::parse;
+    pub use ast::{Program, Statement, Expr, BinOp};
+    pub use value::Value;
 }

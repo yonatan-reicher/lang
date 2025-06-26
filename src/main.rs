@@ -10,5 +10,6 @@ fn main() {
         eprintln!("Error parsing program: {}", err);
         std::process::exit(1);
     });
-    dbg!(program);
+    dbg!(&program);
+    program.execute(&mut Default::default());
 }
