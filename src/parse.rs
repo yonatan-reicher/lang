@@ -37,6 +37,7 @@ enum Token {
     RParen,
 }
 
+/// Parse a token from the text!
 fn token<'a>() -> Parser<'a, Token> {
     fn number<'a>() -> Parser<'a, i64> {
         fn vec_to_string(vec: Vec<char>) -> String {
