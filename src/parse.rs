@@ -144,7 +144,7 @@ fn expr<'a>() -> Parser<'a, Expr> {
 fn print_statement<'a>() -> Parser<'a, Statement> {
     token_eq(Token::Print).and_then(|()| {
         atom()
-            .map(|to_print| Statement::Print(to_print))
+            .map(Statement::Print)
             .or_err(Error::PrintStatementExpectsSingleArgument)
     })
 }
