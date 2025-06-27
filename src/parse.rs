@@ -86,20 +86,23 @@ fn token<'a>() -> Parser<'a, Token> {
             .map_fail(|_| ())
     }
 
-    Parser::skip_whitespace().and_then(|()| {
-        one_of![
-            symbol(";", Token::Semicolon),
-            symbol(":", Token::Colon),
-            symbol("=", Token::Eq),
-            symbol(",", Token::Comma),
-            symbol("+", Token::Plus),
-            symbol("(", Token::LParen),
-            symbol(")", Token::RParen),
-            identifier_or_keyword(),
-            number().map(Token::Number),
-        ]
-        .map_fail(|_| ())
-    })
+    Parser::skip_whitespace()
+        .and_then(|()| Parser::eof().not().map_fail(|()| ()))
+        .and_then(|()| {
+            one_of![
+                symbol(";", Token::Semicolon),
+                symbol(":", Token::Colon),
+                symbol("=", Token::Eq),
+                symbol(",", Token::Comma),
+                symbol("+", Token::Plus),
+                symbol("(", Token::LParen),
+                symbol(")", Token::RParen),
+                identifier_or_keyword(),
+                number().map(Token::Number),
+                Parser::err(Error::UnregocnizedToken),
+            ]
+            .map_fail(|_| unreachable!())
+        })
 }
 
 fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
