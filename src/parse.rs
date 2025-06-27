@@ -6,6 +6,11 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum Error {
+    // TODO: Make this not hard-coded, or at least made in some reasonable way.
+    #[error(
+        "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '+', '(' and  ')'"
+    )]
+    UnregocnizedToken,
     #[error("Unclosed parenthesis")]
     UnclosedParen,
     #[error("Print statement expects a single argument (print x)")]
