@@ -28,8 +28,8 @@ impl Program {
 mod tests {
     use super::*;
     use crate::ast::Expr;
-    use crate::value::Value;
     use crate::context::PrintOutput;
+    use crate::value::Value;
 
     #[test]
     fn statments() {

@@ -8,17 +8,19 @@ use thiserror::Error;
 pub enum Error {
     // TODO: Make this not hard-coded, or at least made in some reasonable way.
     #[error(
-        "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '+', '(' and  ')'"
+        "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '=>', '+', '(' and  ')'"
     )]
     UnregocnizedToken,
     #[error("Unclosed parenthesis")]
     UnclosedParen,
     #[error("Print statement expects a single argument (print x)")]
     PrintStatementExpectsSingleArgument,
-    #[error("Assigment statement expected an expression")]
+    #[error("Assignment statement expected an expression")]
     AssignmentStatementExpectsExpression,
     #[error("Bad statement")]
     BadStatement,
+    #[error("Did not find function body")]
+    NoFunctionBody,
 }
 
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
@@ -31,6 +33,7 @@ enum Token {
     Colon,
     Comma,
     Plus,
+    FatArrow,
     Eq,
     Print,
     LParen,
@@ -92,6 +95,7 @@ fn token<'a>() -> Parser<'a, Token> {
             one_of![
                 symbol(";", Token::Semicolon),
                 symbol(":", Token::Colon),
+                symbol("=>", Token::FatArrow),
                 symbol("=", Token::Eq),
                 symbol(",", Token::Comma),
                 symbol("+", Token::Plus),
@@ -129,8 +133,22 @@ fn atom<'a>() -> Parser<'a, Expr> {
     })
 }
 
+fn function_expr<'a>() -> Parser<'a, Expr> {
+    token_ident().and_then(|param_name| {
+        token_eq(Token::FatArrow).and_then(move |()| {
+            let param_name = param_name.clone();
+            expr().or_err(Error::NoFunctionBody).map(move |body| {
+                let name = param_name.clone();
+                let body = body.clone();
+                Expr::Func(name, body.into())
+            })
+        })
+    })
+}
+
 fn expr<'a>() -> Parser<'a, Expr> {
     one_of![
+        function_expr(),
         atom().and_then(|left| {
             token_eq(Token::Plus)
                 .and_then(move |_| expr())

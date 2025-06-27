@@ -25,12 +25,12 @@ pub fn execute_string(source_code: &str) -> Result<Vec<value::Value>, Box<dyn st
 
 // Re-export
 pub mod prelude {
-    use super::*;
-    pub use parse::parse;
-    pub use ast::{Program, Statement, Expr, BinOp};
-    pub use value::Value;
-    pub use context::Context;
     pub use super::execute_string;
+    use super::*;
+    pub use ast::{BinOp, Expr, Program, Statement};
+    pub use context::Context;
+    pub use parse::parse;
+    pub use value::Value;
 }
 
 #[cfg(test)]

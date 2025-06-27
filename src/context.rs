@@ -18,7 +18,7 @@ impl PrintOutput {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Context {
     pub vars: std::collections::HashMap<String, Value>,
     pub out: PrintOutput,

@@ -16,6 +16,8 @@ pub enum Expr {
     Str(String),
     Var(String),
     BinOp(Box<Expr>, BinOp, Box<Expr>),
+    /// An expression that introduces a function: `x => x + 1`
+    Func(String, Box<Expr>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,4 +29,3 @@ pub enum BinOp {
     Eq,
     And,
 }
-

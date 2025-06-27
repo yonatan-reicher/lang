@@ -1,6 +1,6 @@
-use crate::ast::{Expr, BinOp};
-use crate::value::Value;
+use crate::ast::{BinOp, Expr};
 use crate::context::Context;
+use crate::value::{Func, Value};
 
 impl Expr {
     pub fn eval(&self, context: &Context) -> Value {
@@ -17,6 +17,11 @@ impl Expr {
                 let rhs_lazy = || right.eval(context);
                 Self::bin_op(lhs, *op, rhs_lazy)
             }
+            Expr::Func(name, body) => Value::Func(Func {
+                name: name.clone(),
+                closure: context.clone().into(),
+                body: body.clone().into(),
+            }),
         }
     }
 
@@ -50,7 +55,7 @@ impl Expr {
                 Value::Bool(true) => rhs(),
                 Value::Bool(false) => Value::Bool(false),
                 _ => panic!("Invalid type for logical AND"),
-            }
+            },
         }
     }
 }
