@@ -1,9 +1,5 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 
-use crate::context::{Context, PrintOutput};
 use crate::execute_string;
-use crate::prelude::Value;
 use indoc::indoc;
 
 fn default<T: Default>() -> T {

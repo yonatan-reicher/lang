@@ -7,7 +7,7 @@ fn main() {
         .collect::<Vec<_>>()
         .join("\n");
     let program = parse::parse(&text).unwrap_or_else(|err| {
-        eprintln!("Error parsing program: {}", err);
+        eprintln!("Error parsing program: {err}");
         std::process::exit(1);
     });
     dbg!(&program);

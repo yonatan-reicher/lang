@@ -11,7 +11,7 @@ impl Expr {
                 .vars
                 .get(name)
                 .cloned()
-                .unwrap_or_else(|| panic!("Variable '{}' not found", name)),
+                .unwrap_or_else(|| panic!("Variable '{name}' not found")),
             Expr::BinOp(left, op, right) => {
                 let lhs = left.eval(context);
                 let rhs_lazy = || right.eval(context);
