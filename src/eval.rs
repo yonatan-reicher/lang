@@ -1,6 +1,46 @@
 use crate::ast::{BinOp, Expr};
 use crate::context::Context;
 use crate::value::{Func, Value};
+use thiserror::Error;
+
+#[derive(Debug, Clone, Error)]
+#[error(
+"Function application error: {func:?} was applied with arguments {args:?}, but was not able on the {on_arg_1}th argument, which was {the_arg:?}, the function returned {returns:?}. This cannot be applied, but there were still more arguments to apply.",
+    on_arg_1 = on_arg + 1,
+    the_arg = &args[*on_arg],
+)]
+pub struct ApplyAllError {
+    func: Func,
+    args: Vec<Value>,
+    returns: Value,
+    on_arg: usize,
+}
+
+impl Func {
+    pub fn apply(&self, arg: Value) -> Value {
+        let mut context = self.closure.as_ref().clone();
+        context.vars.insert(self.name.clone(), arg);
+        self.body.eval(&context)
+    }
+
+    pub fn apply_all(&self, args: &[Value]) -> Result<Value, ApplyAllError> {
+        let mut ret = Value::Func(self.clone());
+        for (i, arg) in args.iter().enumerate() {
+            let func = match ret {
+                Value::Func(func) => func,
+                _ => return Err(ApplyAllError {
+                    func: self.clone(),
+                    args: args.to_vec(),
+                    returns: ret,
+                    on_arg: i,
+                }),
+            };
+            let applied = func.apply(arg.clone());
+            ret = applied;
+        }
+        Ok(ret)
+    }
+}
 
 impl Expr {
     pub fn eval(&self, context: &Context) -> Value {
