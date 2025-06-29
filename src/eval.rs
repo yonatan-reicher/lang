@@ -62,6 +62,25 @@ impl Expr {
                 closure: context.clone().into(),
                 body: body.clone().into(),
             }),
+            Expr::App(exprs) => {
+                assert!(
+                    exprs.len() >= 2,
+                    "`Expr::App` should have at least two elements",
+                );
+                let values = exprs.iter()
+                    .map(|e| e.eval(context)).collect::<Vec<_>>();
+                let func = &values[0];
+                let args = &values[1..];
+                let Value::Func(func) = func else {
+                    panic!("First element of application must be a function, found: {:?}", func);
+                };
+                func.apply_all(args).unwrap_or_else(|err| {
+                    panic!(
+                        "Function application error: {}",
+                        err
+                    )
+                })
+            }
         }
     }
 

@@ -18,6 +18,10 @@ pub enum Expr {
     BinOp(Box<Expr>, BinOp, Box<Expr>),
     /// An expression that introduces a function: `x => x + 1`
     Func(String, Box<Expr>),
+    /// A function application: `f(42)`
+    /// Note: The vector (should) always contain at least two elements.
+    /// The first element is the function being applied.
+    App(Vec<Expr>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -11,8 +11,8 @@ pub enum Error {
         "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '=>', '+', '(' and  ')'"
     )]
     UnregocnizedToken,
-    #[error("Unclosed parenthesis")]
-    UnclosedParen,
+    #[error("Expected a ')' here, because the expression ends here, but the ')' was not found")]
+    MissingParen,
     #[error("Print statement expects a single argument (print x)")]
     PrintStatementExpectsSingleArgument,
     #[error("Assignment statement expected an expression")]
@@ -125,7 +125,7 @@ fn atom<'a>() -> Parser<'a, Expr> {
         Token::LParen => expr().and_then(|expr| {
             token_eq(Token::RParen)
                 .map(move |_| expr.clone())
-                .or_err(Error::UnclosedParen)
+                .or_err(Error::MissingParen)
         }),
         Token::Number(n) => Parser::ret(Expr::Int(n)),
         Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
@@ -146,6 +146,17 @@ fn function_expr<'a>() -> Parser<'a, Expr> {
     })
 }
 
+fn application_expr_or_atom<'a>() -> Parser<'a, Expr> {
+    atom().repeat_1().map(|atoms| {
+        debug_assert!(!atoms.is_empty(), "repeat_1 always returns non-empty");
+        if let [lonely_atom] = atoms.as_slice() {
+            lonely_atom.clone()
+        } else {
+            Expr::App(atoms.clone())
+        }
+    })
+}
+
 fn expr<'a>() -> Parser<'a, Expr> {
     one_of![
         function_expr(),
@@ -154,6 +165,7 @@ fn expr<'a>() -> Parser<'a, Expr> {
                 .and_then(move |_| expr())
                 .map(move |right| Expr::BinOp(Box::new(left.clone()), BinOp::Add, Box::new(right)))
         }),
+        application_expr_or_atom(),
         atom(),
     ]
     .map_fail(|_| ())
