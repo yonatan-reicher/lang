@@ -5,7 +5,7 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
 #[error(
-"Function application error: {func:?} was applied with arguments {args:?}, but was not able on the {on_arg_1}th argument, which was {the_arg:?}, the function returned {returns:?}. This cannot be applied, but there were still more arguments to apply.",
+    "Function application error: {func:?} was applied with arguments {args:?}, but was not able on the {on_arg_1}th argument, which was {the_arg:?}, the function returned {returns:?}. This cannot be applied, but there were still more arguments to apply.",
     on_arg_1 = on_arg + 1,
     the_arg = &args[*on_arg],
 )]
