@@ -54,7 +54,7 @@ mod tests {
         use Expr::*;
         use Statement::*;
         let program = Program {
-            name: "Foo".to_string(),
+            module_decl: None,
             statement: vec![
                 Assignment("x".to_string(), Int(10)),
                 Assignment("y".to_string(), Str("10".into())),

@@ -1,17 +1,13 @@
 use crate::execute_string;
 use indoc::indoc;
 
-fn default<T: Default>() -> T {
-    Default::default()
-}
-
 #[test]
-fn assigment_and_print() {
+fn assignment_and_print() {
     assert_eq!(
         execute_string(indoc! {"
-                x = 3
-                print x
-                print x
+                x = 3;
+                print x;
+                print x;
             "})
         .unwrap(),
         vec![3.into(), 3.into()],
@@ -22,8 +18,8 @@ fn assigment_and_print() {
 fn test_function_call() {
     assert_eq!(
         execute_string(indoc! {"
-            f = (x => x + 1)
-            print (f 10)
+            f = (x => x + 1);
+            print (f 10);
         "})
         .unwrap(),
         vec![11.into()],

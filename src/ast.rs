@@ -1,7 +1,13 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub name: String,
+    pub module_decl: Option<ModuleDecl>,
     pub statement: Vec<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModuleDecl {
+    pub name: String,
+    pub exports: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

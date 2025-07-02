@@ -1,6 +1,6 @@
 //! This module is responsible for parsing from source code to AST.
 
-use crate::ast::{BinOp, Expr, Program, Statement};
+use crate::ast::{BinOp, Expr, ModuleDecl, Program, Statement};
 use nessie_parse::{ParseResult, one_of};
 use thiserror::Error;
 
@@ -21,6 +21,18 @@ pub enum Error {
     BadStatement,
     #[error("Did not find function body")]
     NoFunctionBody,
+    #[error("Expected to a see a name after `module` keyword")]
+    ExpectedModuleName,
+    #[error(
+        "Export statement expects a list of names in parentheses, like `export (name1 name2)`. Missing left parenthesis '('"
+    )]
+    ExportMissingLParen,
+    #[error(
+        "Export statement expects a list of names in parentheses, like `export (name1 name2)`. Missing right parenthesis ')'"
+    )]
+    ExportMissingRParen,
+    #[error("Missing semicolon ';' at the end of the statement")]
+    MissingSemicolon,
 }
 
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
@@ -38,6 +50,8 @@ enum Token {
     Print,
     LParen,
     RParen,
+    Module,
+    Export,
 }
 
 /// Parse a token from the text!
@@ -79,6 +93,8 @@ fn token<'a>() -> Parser<'a, Token> {
             // Keywords should be added here!
             .map(|ident| match ident.as_str() {
                 "print" => Token::Print,
+                "module" => Token::Module,
+                "export" => Token::Export,
                 _ => Token::Ident(ident),
             })
     }
@@ -198,19 +214,57 @@ fn statement<'a>() -> Parser<'a, Statement> {
         Parser::err(Error::BadStatement)
     ]
     .map_fail(|_| unreachable!())
+    .and_then(|s| {
+        token_eq(Token::Semicolon)
+            .or_err(Error::MissingSemicolon)
+            .map(move |_| s.clone())
+    })
 }
 
 fn statement_but_fails_on_eof<'a>() -> Parser<'a, Statement> {
     (Parser::skip_whitespace().and_then(|()| Parser::eof().not())).and_then(|()| statement())
 }
 
+fn module_exports<'a>() -> Parser<'a, Vec<String>> {
+    // export
+    token_eq(Token::Export).and_then(|()| {
+        // export (
+        token_eq(Token::LParen)
+            .or_err(Error::ExportMissingLParen)
+            .and_then(|()| {
+                // export ( f g h
+                token_ident().repeat_0().and_then(|names| {
+                    // export ( f g h )
+                    token_eq(Token::RParen)
+                        .or_err(Error::ExportMissingRParen)
+                        .map(move |()| names.clone())
+                })
+            })
+    })
+}
+
+fn module_declaration<'a>() -> Parser<'a, ModuleDecl> {
+    token_eq(Token::Module).and_then(|()| {
+        token_ident()
+            .or_err(Error::ExpectedModuleName)
+            .and_then(|name| {
+                module_exports().maybe().map(move |exports| ModuleDecl {
+                    name: name.clone(),
+                    exports: exports.unwrap_or_default(),
+                })
+            })
+    })
+}
+
 fn program<'a>() -> Parser<'a, Program> {
-    statement_but_fails_on_eof()
-        .repeat_0()
-        .map(|statements| Program {
-            name: "placeholder program name".to_string(),
-            statement: statements,
-        })
+    module_declaration().maybe().and_then(|module_decl| {
+        statement_but_fails_on_eof()
+            .repeat_0()
+            .map(move |statements| Program {
+                module_decl: module_decl.clone(),
+                statement: statements,
+            })
+    })
 }
 
 pub fn parse(text: &str) -> Result<Program, Error> {
@@ -321,6 +375,77 @@ mod tests {
                     offset: 11,
                 },
             ),
+        );
+    }
+
+    #[test]
+    fn empty_module() {
+        assert_eq!(
+            parse("module foo"),
+            Ok(Program {
+                module_decl: Some(ModuleDecl {
+                    name: "foo".to_string(),
+                    exports: vec![],
+                }),
+                statement: vec![],
+            })
+        );
+    }
+
+    #[test]
+    fn empty_module_empty_exports() {
+        assert_eq!(
+            parse(indoc! {r"
+                module foo export ()
+            "}),
+            Ok(Program {
+                module_decl: Some(ModuleDecl {
+                    name: "foo".to_string(),
+                    exports: vec![],
+                }),
+                statement: vec![],
+            }),
+        );
+    }
+
+    #[test]
+    fn module_with_exports() {
+        assert_eq!(
+            parse(indoc! {r"
+                module modmod export (
+                    hello friend
+                )
+                hello = 2;
+                print hello;
+                world = 1 + 2;
+                friend = (1 + 1) + 1;
+            "}),
+            Ok(Program {
+                module_decl: Some(ModuleDecl {
+                    name: "modmod".to_string(),
+                    exports: vec!["hello".into(), "friend".into()],
+                }),
+                statement: vec![
+                    Statement::Assignment("hello".to_string(), Expr::Int(2)),
+                    Statement::Print(Expr::Var("hello".to_string())),
+                    Statement::Assignment(
+                        "world".to_string(),
+                        Expr::BinOp(Box::new(Expr::Int(1)), BinOp::Add, Box::new(Expr::Int(2)),),
+                    ),
+                    Statement::Assignment(
+                        "friend".to_string(),
+                        Expr::BinOp(
+                            Box::new(Expr::BinOp(
+                                Box::new(Expr::Int(1)),
+                                BinOp::Add,
+                                Box::new(Expr::Int(1)),
+                            )),
+                            BinOp::Add,
+                            Box::new(Expr::Int(1)),
+                        ),
+                    ),
+                ],
+            }),
         );
     }
 }
