@@ -12,7 +12,9 @@ pub struct ModuleDecl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
+    /// `x = 42;`
     Assignment(String, Expr),
+    /// `print x;`
     Print(Expr),
 }
 
