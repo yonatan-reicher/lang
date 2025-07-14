@@ -23,14 +23,16 @@ pub enum Error {
     NoFunctionBody,
     #[error("Expected to a see a name after `module` keyword")]
     ExpectedModuleName,
+    #[error("Expected to a see a name after `import` keyword")]
+    ExpectedModuleNameImport,
     #[error(
-        "Export statement expects a list of names in parentheses, like `export (name1 name2)`. Missing left parenthesis '('"
+        "Expects a list of names in parentheses after the `exporting` keyword, like `exporting (name1 name2)`. Missing left parenthesis '('"
     )]
-    ExportMissingLParen,
+    ExportingMissingLParen,
     #[error(
-        "Export statement expects a list of names in parentheses, like `export (name1 name2)`. Missing right parenthesis ')'"
+        "Expects a list of names in parentheses after the `exporting` keyword, like `exporting (name1 name2)`. Missing right parenthesis ')'"
     )]
-    ExportMissingRParen,
+    ExportingMissingRParen,
     #[error("Missing semicolon ';' at the end of the statement")]
     MissingSemicolon,
 }
@@ -51,7 +53,9 @@ enum Token {
     LParen,
     RParen,
     Module,
-    Export,
+    Exporting,
+    Import,
+    Exposing,
 }
 
 /// Parse a token from the text!
@@ -94,7 +98,9 @@ fn token<'a>() -> Parser<'a, Token> {
             .map(|ident| match ident.as_str() {
                 "print" => Token::Print,
                 "module" => Token::Module,
-                "export" => Token::Export,
+                "exporting" => Token::Exporting,
+                "import" => Token::Import,
+                "exposing" => Token::Exposing,
                 _ => Token::Ident(ident),
             })
     }
@@ -206,6 +212,51 @@ fn assignment_statement<'a>() -> Parser<'a, Statement> {
     })
 }
 
+/// Parses a list of names in parenthesis like `(hello cruel world)`.
+/// In case of wrong syntax, doesn't fail - errors instead.
+fn parenthesis_name_list<'a>(
+    on_missing_left_paren: fn() -> Error,
+    on_missing_right_paren: fn() -> Error,
+) -> Parser<'a, Vec<String>> {
+    // (
+    token_eq(Token::LParen)
+        .or_err(on_missing_left_paren())
+        .and_then(move |()| {
+            // exporting ( f g h
+            token_ident().repeat_0().and_then(move |names| {
+                // exporting ( f g h )
+                token_eq(Token::RParen)
+                    .or_err(on_missing_right_paren())
+                    .map(move |()| names.clone())
+            })
+        })
+}
+
+fn import_exposing<'a>() -> Parser<'a, Vec<String>> {
+    token_eq(Token::Exposing).and_then(|()| {
+        parenthesis_name_list(
+            || Error::ExportingMissingLParen,
+            || Error::ExportingMissingRParen,
+        )
+    })
+}
+
+fn import_statement<'a>() -> Parser<'a, Statement> {
+    token_eq(Token::Import).and_then(|()| {
+        token_ident()
+            .or_err(Error::ExpectedModuleNameImport)
+            .and_then(|module_name| {
+                import_exposing().maybe().map(move |exposing| {
+                    let exposing = exposing.unwrap_or_default();
+                    Statement::Import {
+                        module_name: module_name.clone(),
+                        imports: exposing,
+                    }
+                })
+            })
+    })
+}
+
 /// This parser never fails, always returns or errs.
 fn statement<'a>() -> Parser<'a, Statement> {
     one_of![
@@ -225,21 +276,12 @@ fn statement_but_fails_on_eof<'a>() -> Parser<'a, Statement> {
     (Parser::skip_whitespace().and_then(|()| Parser::eof().not())).and_then(|()| statement())
 }
 
-fn module_exports<'a>() -> Parser<'a, Vec<String>> {
-    // export
-    token_eq(Token::Export).and_then(|()| {
-        // export (
-        token_eq(Token::LParen)
-            .or_err(Error::ExportMissingLParen)
-            .and_then(|()| {
-                // export ( f g h
-                token_ident().repeat_0().and_then(|names| {
-                    // export ( f g h )
-                    token_eq(Token::RParen)
-                        .or_err(Error::ExportMissingRParen)
-                        .map(move |()| names.clone())
-                })
-            })
+fn module_exporting<'a>() -> Parser<'a, Vec<String>> {
+    token_eq(Token::Exporting).and_then(|()| {
+        parenthesis_name_list(
+            || Error::ExportingMissingLParen,
+            || Error::ExportingMissingRParen,
+        )
     })
 }
 
@@ -248,7 +290,7 @@ fn module_declaration<'a>() -> Parser<'a, ModuleDecl> {
         token_ident()
             .or_err(Error::ExpectedModuleName)
             .and_then(|name| {
-                module_exports().maybe().map(move |exports| ModuleDecl {
+                module_exporting().maybe().map(move |exports| ModuleDecl {
                     name: name.clone(),
                     exports: exports.unwrap_or_default(),
                 })
@@ -393,10 +435,10 @@ mod tests {
     }
 
     #[test]
-    fn empty_module_empty_exports() {
+    fn empty_module_empty_exporting() {
         assert_eq!(
             parse(indoc! {r"
-                module foo export ()
+                module foo exporting ()
             "}),
             Ok(Program {
                 module_decl: Some(ModuleDecl {
@@ -409,10 +451,10 @@ mod tests {
     }
 
     #[test]
-    fn module_with_exports() {
+    fn module_with_exporting() {
         assert_eq!(
             parse(indoc! {r"
-                module modmod export (
+                module modmod exporting (
                     hello friend
                 )
                 hello = 2;

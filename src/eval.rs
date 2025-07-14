@@ -28,12 +28,14 @@ impl Func {
         for (i, arg) in args.iter().enumerate() {
             let func = match ret {
                 Value::Func(func) => func,
-                _ => return Err(ApplyAllError {
-                    func: self.clone(),
-                    args: args.to_vec(),
-                    returns: ret,
-                    on_arg: i,
-                }),
+                _ => {
+                    return Err(ApplyAllError {
+                        func: self.clone(),
+                        args: args.to_vec(),
+                        returns: ret,
+                        on_arg: i,
+                    });
+                }
             };
             let applied = func.apply(arg.clone());
             ret = applied;
@@ -67,19 +69,17 @@ impl Expr {
                     exprs.len() >= 2,
                     "`Expr::App` should have at least two elements",
                 );
-                let values = exprs.iter()
-                    .map(|e| e.eval(context)).collect::<Vec<_>>();
+                let values = exprs.iter().map(|e| e.eval(context)).collect::<Vec<_>>();
                 let func = &values[0];
                 let args = &values[1..];
                 let Value::Func(func) = func else {
-                    panic!("First element of application must be a function, found: {:?}", func);
-                };
-                func.apply_all(args).unwrap_or_else(|err| {
                     panic!(
-                        "Function application error: {}",
-                        err
-                    )
-                })
+                        "First element of application must be a function, found: {:?}",
+                        func
+                    );
+                };
+                func.apply_all(args)
+                    .unwrap_or_else(|err| panic!("Function application error: {}", err))
             }
         }
     }

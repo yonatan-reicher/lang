@@ -7,6 +7,7 @@ pub struct Program {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleDecl {
     pub name: String,
+    // TODO: Rename to exporting?
     pub exports: Vec<String>,
 }
 
@@ -14,6 +15,8 @@ pub struct ModuleDecl {
 pub enum Statement {
     /// `x = 42;`
     Assignment(String, Expr),
+    /// `import module_name;` or `import module_name exposing (foo, bar);`
+    Import { module_name: String, imports: Vec<String> },
     /// `print x;`
     Print(Expr),
 }
