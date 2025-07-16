@@ -9,10 +9,38 @@ pub enum Value {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Func {
+pub enum Func {
+    Lambda(LambdaFunc),
+    Builtin(BuiltinFunc),
+}
+
+impl Func {
+    pub const fn name(&self) -> &String {
+        match self {
+            Func::Lambda(l) => &l.name,
+            Func::Builtin(b) => &b.name,
+        }
+    }
+
+    pub const fn name_mut(&mut self) -> &mut String {
+        match self {
+            Func::Lambda(l) => &mut l.name,
+            Func::Builtin(b) => &mut b.name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LambdaFunc {
     pub name: String,
     pub closure: Rc<crate::context::Context>,
     pub body: Rc<crate::ast::Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BuiltinFunc {
+    pub name: String,
+    pub func: fn(&[Value]) -> Value,
 }
 
 macro_rules! impl_from {
