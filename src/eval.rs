@@ -110,13 +110,10 @@ impl Expr {
                 let func = &values[0];
                 let args = &values[1..];
                 let Value::Func(func) = func else {
-                    panic!(
-                        "First element of application must be a function, found: {:?}",
-                        func
-                    );
+                    panic!("First element of application must be a function, found: {func:?}");
                 };
                 func.apply_all(args)
-                    .unwrap_or_else(|err| panic!("Function application error: {}", err))
+                    .unwrap_or_else(|err| panic!("Function application error: {err}"))
             }
         }
     }

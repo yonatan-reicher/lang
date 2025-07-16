@@ -1,7 +1,5 @@
 use crate::ast::{Program, Statement};
 use crate::context::Context;
-use functionality::Mutate;
-
 
 impl Statement {
     pub fn execute(&self, context: &mut Context) {
@@ -14,7 +12,10 @@ impl Statement {
                 let value = expr.eval(context);
                 context.out.print(&value);
             }
-            Statement::Import { module_name, imports } => {
+            Statement::Import {
+                module_name,
+                imports,
+            } => {
                 let Some(module) = context.modules.get(module_name) else {
                     panic!("No module '{module_name}'");
                 };
@@ -43,7 +44,7 @@ mod tests {
     use crate::ast::Expr;
     use crate::context::PrintOutput;
     use crate::value::Value;
-    use functionality;
+    use functionality::Mutate;
 
     #[test]
     fn statments() {
@@ -55,7 +56,8 @@ mod tests {
             vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
             out: PrintOutput::Vec(std::rc::Rc::clone(&out)),
             modules: [].into(),
-        }.mutate(Context::add_stdlib);
+        }
+        .mutate(Context::add_stdlib);
 
         s1.execute(&mut context); // x = 100;
         s2.execute(&mut context); // print x;
