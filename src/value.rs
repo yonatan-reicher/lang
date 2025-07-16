@@ -25,6 +25,7 @@ macro_rules! impl_from {
     };
 }
 
+// Implement From conversions
 impl_from!(Bool, bool);
 impl_from!(Int, i64);
 impl_from!(Str, String);
