@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::value::Value;
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -19,7 +21,13 @@ impl PrintOutput {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
+pub struct Module {
+    pub values: HashMap<String, Value>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Context {
     pub vars: std::collections::HashMap<String, Value>,
+    pub modules: HashMap<String, Module>,
     pub out: PrintOutput,
 }

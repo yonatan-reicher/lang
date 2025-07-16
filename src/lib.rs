@@ -6,6 +6,7 @@ pub mod value;
 pub mod parse;
 /// Defines the context of the interpreter while it is running.
 pub mod context;
+pub mod stdlib;
 /// Evaluating ASTs to values.
 pub mod eval;
 /// Executing programs.

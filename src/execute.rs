@@ -33,6 +33,7 @@ mod tests {
     use crate::ast::Expr;
     use crate::context::PrintOutput;
     use crate::value::Value;
+    use functionality;
 
     #[test]
     fn statments() {
@@ -43,7 +44,8 @@ mod tests {
         let mut context = Context {
             vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
             out: PrintOutput::Vec(std::rc::Rc::clone(&out)),
-        };
+            modules: [].into(),
+        }.pipe_mut(Context::add_stdlib);
 
         s1.execute(&mut context); // x = 100;
         s2.execute(&mut context); // print x;
