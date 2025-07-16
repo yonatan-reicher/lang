@@ -262,7 +262,8 @@ fn statement<'a>() -> Parser<'a, Statement> {
     one_of![
         print_statement(),
         assignment_statement(),
-        Parser::err(Error::BadStatement)
+        import_statement(),
+        Parser::err(Error::BadStatement),
     ]
     .map_fail(|_| unreachable!())
     .and_then(|s| {

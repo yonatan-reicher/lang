@@ -17,7 +17,9 @@ pub fn execute_string(source_code: &str) -> Result<Vec<value::Value>, Box<dyn st
     let mut context = context::Context {
         vars: [].into(),
         out: context::PrintOutput::Vec(std::rc::Rc::clone(&out)),
+        modules: [].into(),
     };
+    context.add_stdlib();
     let ast = parse::parse(source_code)?;
     ast.execute(&mut context);
     let vec = std::mem::take(out.borrow_mut().as_mut());

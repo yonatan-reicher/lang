@@ -25,3 +25,18 @@ fn test_function_call() {
         vec![11.into()],
     );
 }
+
+#[test]
+fn test_function_stdlib() {
+    assert_eq!(
+        execute_string(indoc! {"
+            import stdlib exposing (abs neg);
+            print 10;
+            print (neg 10);
+            print (abs 10);
+            print (abs (neg 10));
+        "})
+        .unwrap(),
+        vec![10.into(), (-10).into(), 10.into(), 10.into()],
+    );
+}

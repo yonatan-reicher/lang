@@ -1,6 +1,7 @@
 use crate::ast::{BinOp, Expr};
 use crate::context::Context;
-use crate::value::{Func, Value};
+use crate::value::{Func, Value, LambdaFunc, BuiltinFunc};
+use functionality::Mutate;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -16,15 +17,51 @@ pub struct ApplyAllError {
     on_arg: usize,
 }
 
-impl Func {
+impl LambdaFunc {
     pub fn apply(&self, arg: Value) -> Value {
         let mut context = self.closure.as_ref().clone();
-        context.vars.insert(self.name.clone(), arg);
+        context.vars.insert(self.param_name.clone(), arg);
         self.body.eval(&context)
     }
+}
 
+impl BuiltinFunc {
+    fn apply_finalize(&self, args: &[Value]) -> Value {
+        (self.definition.func)(args)
+    }
+
+    pub fn apply(&self, arg: Value) -> Value {
+        assert!(0 < self.definition.arity, "Arity must be positive");
+        assert!(self.applied_already.len() < self.definition.arity as _, "This function has too many already-applied arguments!");
+
+        // Let's apply the argument
+        let args = 
+            self.applied_already.clone()
+            .mutate(move |v| v.push(arg));
+
+        // Then we branch on whether we finished or not
+        if self.definition.arity == 1 {
+            self.apply_finalize(&args)
+        } else {
+            BuiltinFunc {
+                applied_already: args,
+                definition: self.definition.clone(),
+            }.into()
+        }
+    }
+}
+
+impl Func {
+    pub fn apply(&self, arg: Value) -> Value {
+        match self {
+            Func::Lambda(f) => f.apply(arg),
+            Func::Builtin(f) => f.apply(arg),
+        }
+    }
     pub fn apply_all(&self, args: &[Value]) -> Result<Value, ApplyAllError> {
-        let mut ret = Value::Func(self.clone());
+        // We are going to continue applying arguments on this variable.
+        let mut ret: Value = self.clone().into();
+        // We want the index for the error message.
         for (i, arg) in args.iter().enumerate() {
             let func = match ret {
                 Value::Func(func) => func,
@@ -59,11 +96,11 @@ impl Expr {
                 let rhs_lazy = || right.eval(context);
                 Self::bin_op(lhs, *op, rhs_lazy)
             }
-            Expr::Func(name, body) => Value::Func(Func {
-                name: name.clone(),
+            Expr::Func(name, body) => LambdaFunc {
+                param_name: name.clone(),
                 closure: context.clone().into(),
                 body: body.clone().into(),
-            }),
+            }.into(),
             Expr::App(exprs) => {
                 assert!(
                     exprs.len() >= 2,
@@ -129,6 +166,7 @@ mod tests {
         let context = Context {
             vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
             out: PrintOutput::Ignore,
+            modules: Default::default(),
         };
         let expr = Expr::Var("x".to_string());
         assert_eq!(expr.eval(&context), Value::Int(42));
