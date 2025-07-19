@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::io::{stdin, stdout, Write};
+use std::io::{Write, stdin, stdout};
 use std::path::PathBuf;
 use std::process::exit;
 
@@ -101,7 +101,9 @@ fn main() {
                 print!(">   ");
                 stdout().flush().expect("stdout should be flushable");
                 line.clear();
-                stdin().read_line(&mut line).expect("stdin should be readable");
+                stdin()
+                    .read_line(&mut line)
+                    .expect("stdin should be readable");
                 // TODO
                 run_text(&line);
             }
