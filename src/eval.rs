@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use crate::ast::{BinOp, Expr};
 use crate::context::Context;
-use crate::value::{Func, Value, LambdaFunc, BuiltinFunc};
+use crate::value::{BuiltinFunc, ConstructorFunc, Func, LambdaFunc, Value};
 use functionality::Mutate;
 use thiserror::Error;
 
@@ -25,28 +27,69 @@ impl LambdaFunc {
     }
 }
 
-impl BuiltinFunc {
-    fn apply_finalize(&self, args: &[Value]) -> Value {
-        (self.definition.func)(args)
-    }
+trait LotsOfParametersFunc: Into<Value> {
+    fn apply_finalize(&self, args: Vec<Value>) -> Value;
 
-    pub fn apply(&self, arg: Value) -> Value {
-        assert!(0 < self.definition.arity, "Arity must be positive");
-        assert!(self.applied_already.len() < self.definition.arity as _, "This function has too many already-applied arguments!");
+    fn arity(&self) -> u8;
+
+    fn applied_already(&self) -> &Vec<Value>;
+    fn with_applied_already(&self, applied_already: Vec<Value>) -> Self;
+
+    fn apply(&self, arg: Value) -> Value {
+        assert!(0 < self.arity(), "Arity must be positive");
+        assert!(self.applied_already().len() < self.arity() as _, "This function has too many already-applied arguments!");
 
         // Let's apply the argument
         let args = 
-            self.applied_already.clone()
+            self.applied_already().clone()
             .mutate(move |v| v.push(arg));
 
         // Then we branch on whether we finished or not
-        if self.definition.arity == 1 {
-            self.apply_finalize(&args)
+        if self.arity() == 1 {
+            self.apply_finalize(args)
         } else {
-            BuiltinFunc {
-                applied_already: args,
-                definition: self.definition.clone(),
-            }.into()
+            self.with_applied_already(args).into()
+        }
+    }
+}
+
+impl LotsOfParametersFunc for BuiltinFunc {
+    fn apply_finalize(&self, args: Vec<Value>) -> Value {
+        (self.definition.func)(&args)
+    }
+
+    fn arity(&self) -> u8 { self.definition.arity }
+
+    fn applied_already(&self) -> &Vec<Value> {
+        &self.applied_already
+    }
+
+    fn with_applied_already(&self, applied_already: Vec<Value>) -> Self {
+        Self {
+            applied_already,
+            definition: Rc::clone(&self.definition),
+        }
+    }
+}
+
+impl LotsOfParametersFunc for ConstructorFunc {
+    fn apply_finalize(&self, args: Vec<Value>) -> Value {
+        assert_eq!(self.arity() as usize, args.len());
+        Value::Constructed(self.constructor.clone(), args)
+    }
+
+    fn arity(&self) -> u8 {
+        self.constructor.parameters.len() as _
+    }
+
+    fn applied_already(&self) -> &Vec<Value> {
+        &self.applied_already
+    }
+
+    fn with_applied_already(&self, applied_already: Vec<Value>) -> Self {
+        Self {
+            applied_already,
+            constructor: self.constructor.clone(),
         }
     }
 }
@@ -56,8 +99,11 @@ impl Func {
         match self {
             Func::Lambda(f) => f.apply(arg),
             Func::Builtin(f) => f.apply(arg),
+            Func::Constructor(f) => f.apply(arg),
         }
     }
+
+    #[allow(clippy::result_large_err)]
     pub fn apply_all(&self, args: &[Value]) -> Result<Value, ApplyAllError> {
         // We are going to continue applying arguments on this variable.
         let mut ret: Value = self.clone().into();

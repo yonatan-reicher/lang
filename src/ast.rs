@@ -19,6 +19,16 @@ pub enum Statement {
     Import { module_name: String, imports: Vec<String> },
     /// `print x;`
     Print(Expr),
+    /// ```lang
+    /// type List {
+    ///     Nil,
+    ///     Cons head tail,
+    /// };
+    /// ```
+    Type {
+        name: String,
+        constructors: Vec<(String, Vec<String>)>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

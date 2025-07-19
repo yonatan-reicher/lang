@@ -43,19 +43,26 @@ type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
 enum Token {
     Ident(String),
     Number(i64),
-    Semicolon,
     Colon,
     Comma,
-    Plus,
-    FatArrow,
     Eq,
-    Print,
-    LParen,
-    RParen,
-    Module,
     Exporting,
-    Import,
     Exposing,
+    FatArrow,
+    Import,
+    /// `{`
+    LCurly,
+    /// `(`
+    LParen,
+    Module,
+    Plus,
+    Print,
+    /// `}`
+    RCurly,
+    /// `)`
+    RParen,
+    Semicolon,
+    Type,
 }
 
 /// Parse a token from the text!
@@ -96,11 +103,12 @@ fn token<'a>() -> Parser<'a, Token> {
             })
             // Keywords should be added here!
             .map(|ident| match ident.as_str() {
-                "print" => Token::Print,
-                "module" => Token::Module,
                 "exporting" => Token::Exporting,
-                "import" => Token::Import,
                 "exposing" => Token::Exposing,
+                "import" => Token::Import,
+                "module" => Token::Module,
+                "print" => Token::Print,
+                "type" => Token::Type,
                 _ => Token::Ident(ident),
             })
     }
@@ -123,6 +131,8 @@ fn token<'a>() -> Parser<'a, Token> {
                 symbol("+", Token::Plus),
                 symbol("(", Token::LParen),
                 symbol(")", Token::RParen),
+                symbol("{", Token::LCurly),
+                symbol("}", Token::RCurly),
                 identifier_or_keyword(),
                 number().map(Token::Number),
                 Parser::err(Error::UnregocnizedToken),
@@ -257,12 +267,46 @@ fn import_statement<'a>() -> Parser<'a, Statement> {
     })
 }
 
+fn constructor_definition<'a>() -> Parser<'a, (String, Vec<String>)> {
+    token_ident().and_then(|name| {
+        token_ident().repeat_0().and_then(move |parameters| {
+            let name = name.clone();
+            token_eq(Token::Comma)
+                .maybe()
+                .map(move |_| (name.clone(), parameters.clone()))
+        })
+    })
+}
+
+fn type_statement<'a>() -> Parser<'a, Statement> {
+    // type
+    token_eq(Token::Type).and_then(|()| {
+        // type List
+        token_ident().or_err(todo!()).and_then(|name| {
+            // type List {
+            token_eq(Token::LCurly).and_then(move |()| {
+                let name = name.clone();
+                // type List { Nil, Cons head tail,
+                constructor_definition().repeat_0().and_then(move |ctors| {
+                    let name = name.clone();
+                    // type List { Nil, Cons head tail, }
+                    token_eq(Token::RCurly).map(move |()| Statement::Type {
+                        name: name.clone(),
+                        constructors: ctors.clone(),
+                    })
+                })
+            })
+        })
+    })
+}
+
 /// This parser never fails, always returns or errs.
 fn statement<'a>() -> Parser<'a, Statement> {
     one_of![
         print_statement(),
-        assignment_statement(),
         import_statement(),
+        type_statement(),
+        assignment_statement(),
         Parser::err(Error::BadStatement),
     ]
     .map_fail(|_| unreachable!())

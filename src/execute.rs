@@ -1,5 +1,8 @@
+use std::rc::Rc;
+
 use crate::ast::{Program, Statement};
-use crate::context::Context;
+use crate::context::{Context, Module};
+use crate::value::{Constructor, ConstructorFunc, Type};
 
 impl Statement {
     pub fn execute(&self, context: &mut Context) {
@@ -25,6 +28,31 @@ impl Statement {
                     };
                     context.vars.insert(i.clone(), value.clone());
                 }
+            }
+            Statement::Type { name, constructors } => {
+                let r#type = Rc::new(Type {
+                    name: name.clone(),
+                    constructors: constructors
+                        .iter()
+                        .map(|(name, parameters)| Constructor {
+                            name: name.clone(),
+                            parameters: parameters.clone(),
+                        })
+                        .collect(),
+                });
+                // The values we are introducing to a new module in the context.
+                let values = Rc::clone(&r#type)
+                    .constructors
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let func = ConstructorFunc::new(Rc::clone(&r#type), i);
+                        (c.name.clone(), func.into())
+                    })
+                    .collect();
+                // The constructors are added under a new module with a name matching the name of
+                // the type being defined.
+                context.modules.insert(name.clone(), Module { values });
             }
         }
     }
