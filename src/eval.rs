@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::ast::{BinOp, Expr};
 use crate::context::Context;
-use crate::value::{BuiltinFunc, ConstructorFunc, Func, LambdaFunc, Value};
+use crate::value::{BuiltinFunc, Func, LabelFunc, LambdaFunc, Value};
 use functionality::Mutate;
 use thiserror::Error;
 
@@ -72,14 +72,14 @@ impl LotsOfParametersFunc for BuiltinFunc {
     }
 }
 
-impl LotsOfParametersFunc for ConstructorFunc {
-    fn apply_finalize(&self, args: Vec<Value>) -> Value {
-        assert_eq!(self.arity() as usize, args.len());
-        Value::Constructed(self.constructor.clone(), args)
+impl LotsOfParametersFunc for LabelFunc {
+    fn apply_finalize(&self, arguments: Vec<Value>) -> Value {
+        assert_eq!(self.arity() as usize, arguments.len());
+        Value::Labeled { label: self.label.clone(), arguments }
     }
 
     fn arity(&self) -> u8 {
-        self.constructor.parameters.len() as _
+        self.label.parameters.len() as _
     }
 
     fn applied_already(&self) -> &Vec<Value> {
@@ -89,7 +89,7 @@ impl LotsOfParametersFunc for ConstructorFunc {
     fn with_applied_already(&self, applied_already: Vec<Value>) -> Self {
         Self {
             applied_already,
-            constructor: self.constructor.clone(),
+            label: self.label.clone(),
         }
     }
 }
@@ -99,7 +99,7 @@ impl Func {
         match self {
             Func::Lambda(f) => f.apply(arg),
             Func::Builtin(f) => f.apply(arg),
-            Func::Constructor(f) => f.apply(arg),
+            Func::Label(f) => f.apply(arg),
         }
     }
 

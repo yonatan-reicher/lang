@@ -13,7 +13,7 @@ pub enum PrintOutput {
 impl PrintOutput {
     pub fn print(&self, value: &Value) {
         match self {
-            PrintOutput::Stdout => println!("{value:?}"),
+            PrintOutput::Stdout => println!("{value}"),
             PrintOutput::Ignore => (),
             PrintOutput::Vec(vec) => vec.borrow_mut().push(value.clone()),
         }

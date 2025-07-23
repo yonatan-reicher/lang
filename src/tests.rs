@@ -1,7 +1,4 @@
-use crate::{
-    execute_string,
-    value::{Type, Value},
-};
+use crate::{execute_string, value::Value};
 use indoc::indoc;
 
 #[test]
@@ -45,26 +42,23 @@ fn test_function_stdlib() {
 }
 
 #[test]
-fn test_user_type() {
+fn test_label() {
     let stdout = execute_string(indoc! {"
-            type List {
-                Nil,
-                Cons head tail,
-            };
-            import List exposing (Nil Cons);
+            label Nil;
+            label Cons head tail;
             print (Cons 2 Nil);
         "})
     .unwrap();
 
     dbg!(&stdout);
-    let Value::Constructed(c, args) = &stdout[0] else {
-        panic!("the value should have been constructed by a constructor, but was {}", &stdout[0])
-    };
-    assert_eq!(c.name, "Cons");
-    assert_eq!(args[0], 2.into());
-    let Value::Constructed(c, args) = &args[1] else {
+    let Value::Labeled { label, arguments } = &stdout[0] else {
         panic!()
     };
-    assert_eq!(c.name, "Nil");
-    assert_eq!(args, &vec![]);
+    assert_eq!(label.name, "Cons");
+    assert_eq!(arguments[0], 2.into());
+    let Value::Labeled { label, arguments } = &arguments[1] else {
+        panic!()
+    };
+    assert_eq!(label.name, "Nil");
+    assert_eq!(arguments, &vec![]);
 }

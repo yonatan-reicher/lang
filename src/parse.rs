@@ -62,7 +62,7 @@ enum Token {
     /// `)`
     RParen,
     Semicolon,
-    Type,
+    Label,
 }
 
 /// Parse a token from the text!
@@ -108,7 +108,7 @@ fn token<'a>() -> Parser<'a, Token> {
                 "import" => Token::Import,
                 "module" => Token::Module,
                 "print" => Token::Print,
-                "type" => Token::Type,
+                "label" => Token::Label,
                 _ => Token::Ident(ident),
             })
     }
@@ -267,36 +267,20 @@ fn import_statement<'a>() -> Parser<'a, Statement> {
     })
 }
 
-fn constructor_definition<'a>() -> Parser<'a, (String, Vec<String>)> {
-    token_ident().and_then(|name| {
-        token_ident().repeat_0().and_then(move |parameters| {
-            let name = name.clone();
-            token_eq(Token::Comma)
-                .maybe()
-                .map(move |_| (name.clone(), parameters.clone()))
-        })
-    })
-}
-
-fn type_statement<'a>() -> Parser<'a, Statement> {
-    // type
-    token_eq(Token::Type).and_then(|()| {
-        // type List
+fn label_statement<'a>() -> Parser<'a, Statement> {
+    // label
+    token_eq(Token::Label).and_then(|()| {
+        // label Cons
         // token_ident().or_err(todo!()).and_then(|name| {
         token_ident().and_then(|name| {
-            // type List {
-            token_eq(Token::LCurly).and_then(move |()| {
-                let name = name.clone();
-                // type List { Nil, Cons head tail,
-                constructor_definition().repeat_0().and_then(move |ctors| {
-                    let name = name.clone();
-                    // type List { Nil, Cons head tail, }
-                    token_eq(Token::RCurly).map(move |()| Statement::Type {
-                        name: name.clone(),
-                        constructors: ctors.clone(),
-                    })
+            let name = name.clone();
+            // label Cons head tail
+            token_ident()
+                .repeat_0()
+                .map(move |parameters| Statement::Label {
+                    name: name.clone(),
+                    parameters: parameters.clone(),
                 })
-            })
         })
     })
 }
@@ -306,7 +290,7 @@ fn statement<'a>() -> Parser<'a, Statement> {
     one_of![
         print_statement(),
         import_statement(),
-        type_statement(),
+        label_statement(),
         assignment_statement(),
         Parser::err(Error::BadStatement),
     ]

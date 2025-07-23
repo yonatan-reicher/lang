@@ -1,8 +1,6 @@
-use std::rc::Rc;
-
 use crate::ast::{Program, Statement};
-use crate::context::{Context, Module};
-use crate::value::{Constructor, ConstructorFunc, PConstructor, Type, Value};
+use crate::context::Context;
+use crate::value::{Label, LabelFunc, PLabel, Value};
 
 impl Statement {
     pub fn execute(&self, context: &mut Context) {
@@ -29,35 +27,20 @@ impl Statement {
                     context.vars.insert(i.clone(), value.clone());
                 }
             }
-            Statement::Type { name, constructors } => {
-                let r#type = Rc::new(Type {
+            Statement::Label { name, parameters } => {
+                let label = PLabel::from(Label {
                     name: name.clone(),
-                    constructors: constructors
-                        .iter()
-                        .map(|(name, parameters)| Constructor {
-                            name: name.clone(),
-                            parameters: parameters.clone(),
-                        })
-                        .collect(),
+                    parameters: parameters.clone(),
                 });
-                // The values we are introducing to a new module in the context.
-                let values = Rc::clone(&r#type)
-                    .constructors
-                    .iter()
-                    .enumerate()
-                    .map(|(i, c)| {
-                        let constructor = PConstructor::new(Rc::clone(&r#type), i).unwrap();
-                        let value = if constructor.parameters.is_empty() {
-                            Value::Constructed(constructor, vec![])
-                        } else {
-                            ConstructorFunc::new(constructor).unwrap().into()
-                        };
-                        (c.name.clone(), value)
-                    })
-                    .collect();
+                // The value we are introducing to the context.
+                let value = if parameters.is_empty() {
+                    Value::Labeled { label, arguments: vec![] }
+                } else {
+                    LabelFunc::from(label).into()
+                };
                 // The constructors are added under a new module with a name matching the name of
                 // the type being defined.
-                context.modules.insert(name.clone(), Module { values });
+                context.vars.insert(name.clone(), value);
             }
         }
     }

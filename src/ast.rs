@@ -16,18 +16,18 @@ pub enum Statement {
     /// `x = 42;`
     Assignment(String, Expr),
     /// `import module_name;` or `import module_name exposing (foo, bar);`
-    Import { module_name: String, imports: Vec<String> },
+    Import {
+        module_name: String,
+        imports: Vec<String>,
+    },
     /// `print x;`
     Print(Expr),
     /// ```lang
-    /// type List {
-    ///     Nil,
-    ///     Cons head tail,
-    /// };
+    /// label Cons head tail;
     /// ```
-    Type {
+    Label {
         name: String,
-        constructors: Vec<(String, Vec<String>)>,
+        parameters: Vec<String>,
     },
 }
 

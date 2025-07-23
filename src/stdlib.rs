@@ -1,7 +1,7 @@
 use std::rc::Rc;
-use crate::ast::Expr;
+
 use crate::context::{Context, Module};
-use crate::value::{BuiltinDefinition, BuiltinFunc, Constructor, LambdaFunc, PConstructor, Type, Value};
+use crate::value::{BuiltinDefinition, Value};
 
 impl Module {
     pub fn insert(&mut self, builtin: BuiltinDefinition) {
@@ -14,24 +14,25 @@ fn stdlib() -> Module {
     ret.insert(BuiltinDefinition {
         name: "abs".into(),
         arity: 1,
-        func: |values| {
+        func: Rc::new(|values| {
             let [Value::Int(i)] = values else {
                 panic!("AARG");
             };
             i.abs().into()
-        },
+        }),
     });
     ret.insert(BuiltinDefinition {
         name: "neg".into(),
         arity: 1,
-        func: |values| {
+        func: Rc::new(|values| {
             let [Value::Int(i)] = values else {
                 panic!("AARG");
             };
             (-i).into()
-        },
+        }),
     });
 
+    /*
     let print_monad = Rc::new(Type {
         name: "PrintM".into(),
         constructors: vec![
@@ -65,7 +66,7 @@ fn stdlib() -> Module {
                 } else {
                     panic!("this PrintM monad should only contain PrintM monads in it's 'next' field");
                 }
-            }
+            };
             f.apply(last);
             todo!()
         }
@@ -84,6 +85,7 @@ fn stdlib() -> Module {
             },
         ],
     };
+    */
 
     ret
 }

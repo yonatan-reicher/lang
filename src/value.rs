@@ -1,6 +1,5 @@
-use derive_more::{Display, Debug, From};
+use derive_more::{Debug, Deref, Display, From};
 use std::rc::Rc;
-use thiserror::Error;
 
 fn display_applied(name: impl std::fmt::Display, args: &[impl std::fmt::Display]) -> String {
     let arg_strings: Vec<String> = args.iter().map(|x| x.to_string()).collect();
@@ -9,18 +8,24 @@ fn display_applied(name: impl std::fmt::Display, args: &[impl std::fmt::Display]
 
 #[derive(Clone, Debug, Display, From, PartialEq)]
 pub enum Value {
+    /// ()
     #[from]
     Unit,
+    /// true, false
     #[from]
     Bool(bool),
+    /// 123
     #[from]
     Int(i64),
+    /// "Hello handsome"
     #[from]
     Str(String),
-    #[from(Func, LambdaFunc, BuiltinFunc, ConstructorFunc, BuiltinDefinition)]
+    /// print, (x => x + 1)
+    #[from(Func, LambdaFunc, BuiltinFunc, LabelFunc, BuiltinDefinition)]
     Func(Func),
-    #[display("{}", display_applied(_0, _1))]
-    Constructed(PConstructor, Vec<Value>),
+    /// Hello x y     (here `Hello` is the label)
+    #[display("{}", display_applied(label, arguments))]
+    Labeled { label: PLabel, arguments: Vec<Value> }
 }
 
 #[derive(Clone, Debug, Display, From, PartialEq)]
@@ -29,8 +34,8 @@ pub enum Func {
     Lambda(LambdaFunc),
     #[from(BuiltinFunc, BuiltinDefinition)]
     Builtin(BuiltinFunc),
-    #[from]
-    Constructor(ConstructorFunc),
+    #[from(LabelFunc, Label)]
+    Label(LabelFunc),
 }
 
 #[derive(Clone, Debug, Display, PartialEq)]
@@ -57,57 +62,40 @@ impl<T: Into<Rc<BuiltinDefinition>>> From<T> for BuiltinFunc {
 }
 impl PartialEq for BuiltinFunc {
     fn eq(&self, other: &Self) -> bool {
-        self.applied_already == other.applied_already && std::ptr::eq(&self.definition, &other.definition)
+        self.applied_already == other.applied_already
+            && std::ptr::eq(&self.definition, &other.definition)
     }
 }
 
 #[derive(Clone, Debug, Display, PartialEq)]
-#[display("{}", display_applied(constructor, applied_already))]
-pub struct ConstructorFunc {
+#[display("{}", display_applied(label, applied_already))]
+pub struct LabelFunc {
+    pub label: PLabel,
     pub applied_already: Vec<Value>,
-    pub constructor: PConstructor,
+}
+impl<L: Into<PLabel>> From<L> for LabelFunc {
+    fn from(other: L) -> Self {
+        LabelFunc { label: other.into(), applied_already: vec![] }
+    }
 }
 
-#[derive(Clone, Debug, Display, PartialEq)]
+#[derive(Clone, Debug, Display, PartialEq, Eq)]
 #[display("{name}")]
-pub struct Type {
-    pub name: String,
-    pub constructors: Vec<Constructor>,
-}
-
-#[derive(Clone, Debug, Display, PartialEq)]
-#[display("{name}")]
-pub struct Constructor {
+pub struct Label {
     pub name: String,
     pub parameters: Vec<String>,
 }
 
-#[derive(Clone, Debug, Display)]
-#[display("{}", self.deref())]
-pub struct PConstructor {
-    pub r#type: Rc<Type>,
-    ptr: *const Constructor,
+#[derive(Clone, Debug, Deref, Display, From)]
+#[display("{inner}")]
+#[from(Rc<Label>, Label)]
+pub struct PLabel {
+    inner: Rc<Label>,
 }
 
-impl PConstructor {
-    fn deref(&self) -> &Constructor {
-        // Safety:
-        // This dereference is fine as long as this object was constructed with
-        // the appropriate `new` function
-        unsafe { &*self.ptr }
-    }
-}
-
-impl PartialEq for PConstructor {
+impl PartialEq for PLabel {
     fn eq(&self, other: &Self) -> bool {
-        self.ptr == other.ptr
-    }
-}
-
-impl std::ops::Deref for PConstructor {
-    type Target = Constructor;
-    fn deref(&self) -> &Self::Target {
-        self.deref()
+        std::ptr::eq(self.inner.as_ref(), other.inner.as_ref())
     }
 }
 
@@ -117,6 +105,7 @@ pub struct BuiltinDefinition {
     pub name: String,
     pub arity: u8,
     #[debug("{func:p}")]
+    #[allow(clippy::type_complexity)]
     pub func: Rc<dyn Fn(&[Value]) -> Value>,
 }
 
@@ -128,47 +117,7 @@ impl PartialEq for BuiltinDefinition {
 }
 */
 
-#[derive(Debug, Error)]
-pub enum PConstructorError {
-    #[error(
-        "Constructor should take index of an existing constructor, but got '{index}' in type '{type}', which has only {c} constructors",
-        c = r#type.constructors.len(),
-    )]
-    IndexIsNotValid { index: usize, r#type: Rc<Type> },
-}
-
-impl PConstructor {
-    pub fn new(r#type: Rc<Type>, index: usize) -> Result<Self, PConstructorError> {
-        let Some(constructor) = r#type.constructors.get(index) else {
-            return Err(PConstructorError::IndexIsNotValid { index, r#type });
-        };
-        let ptr = constructor as _;
-        Ok(Self { r#type, ptr })
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum ConstructorFuncError {
-    #[error(
-        "constructor given to constructor function object should have parameters, but had none (constructor {constructor})"
-    )]
-    ConstructorIsParameterless { constructor: PConstructor },
-}
-
-impl ConstructorFunc {
-    pub fn new(constructor: PConstructor) -> Result<Self, ConstructorFuncError> {
-        if constructor.parameters.is_empty() {
-            return Err(ConstructorFuncError::ConstructorIsParameterless { constructor });
-        }
-        Ok(Self {
-            constructor,
-            applied_already: vec![],
-        })
-    }
-}
-
 /*
-
 macro_rules! impl_from {
     (
         // The type to convert from.
