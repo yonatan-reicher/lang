@@ -1,4 +1,7 @@
-use crate::execute_string;
+use crate::{
+    execute_string,
+    value::{Type, Value},
+};
 use indoc::indoc;
 
 #[test]
@@ -39,4 +42,29 @@ fn test_function_stdlib() {
         .unwrap(),
         vec![10.into(), (-10).into(), 10.into(), 10.into()],
     );
+}
+
+#[test]
+fn test_user_type() {
+    let stdout = execute_string(indoc! {"
+            type List {
+                Nil,
+                Cons head tail,
+            };
+            import List exposing (Nil Cons);
+            print (Cons 2 Nil);
+        "})
+    .unwrap();
+
+    dbg!(&stdout);
+    let Value::Constructed(c, args) = &stdout[0] else {
+        panic!("the value should have been constructed by a constructor, but was {}", &stdout[0])
+    };
+    assert_eq!(c.name, "Cons");
+    assert_eq!(args[0], 2.into());
+    let Value::Constructed(c, args) = &args[1] else {
+        panic!()
+    };
+    assert_eq!(c.name, "Nil");
+    assert_eq!(args, &vec![]);
 }

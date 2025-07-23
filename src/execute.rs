@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::ast::{Program, Statement};
 use crate::context::{Context, Module};
-use crate::value::{Constructor, ConstructorFunc, Type};
+use crate::value::{Constructor, ConstructorFunc, PConstructor, Type, Value};
 
 impl Statement {
     pub fn execute(&self, context: &mut Context) {
@@ -46,8 +46,13 @@ impl Statement {
                     .iter()
                     .enumerate()
                     .map(|(i, c)| {
-                        let func = ConstructorFunc::new(Rc::clone(&r#type), i);
-                        (c.name.clone(), func.into())
+                        let constructor = PConstructor::new(Rc::clone(&r#type), i).unwrap();
+                        let value = if constructor.parameters.is_empty() {
+                            Value::Constructed(constructor, vec![])
+                        } else {
+                            ConstructorFunc::new(constructor).unwrap().into()
+                        };
+                        (c.name.clone(), value)
                     })
                     .collect();
                 // The constructors are added under a new module with a name matching the name of

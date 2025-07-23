@@ -45,7 +45,7 @@ trait LotsOfParametersFunc: Into<Value> {
             .mutate(move |v| v.push(arg));
 
         // Then we branch on whether we finished or not
-        if self.arity() == 1 {
+        if self.arity() == args.len() as _ {
             self.apply_finalize(args)
         } else {
             self.with_applied_already(args).into()

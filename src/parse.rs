@@ -282,7 +282,8 @@ fn type_statement<'a>() -> Parser<'a, Statement> {
     // type
     token_eq(Token::Type).and_then(|()| {
         // type List
-        token_ident().or_err(todo!()).and_then(|name| {
+        // token_ident().or_err(todo!()).and_then(|name| {
+        token_ident().and_then(|name| {
             // type List {
             token_eq(Token::LCurly).and_then(move |()| {
                 let name = name.clone();
