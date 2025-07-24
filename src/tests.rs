@@ -62,3 +62,19 @@ fn test_label() {
     assert_eq!(label.name, "Nil");
     assert_eq!(arguments, &vec![]);
 }
+
+#[test]
+fn test_print() {
+    let stdout = execute_string("print (Print 2 None);").unwrap();
+    dbg!(&stdout);
+    let Value::Labeled { label, arguments } = &stdout[0] else {
+        panic!()
+    };
+    assert_eq!(label.name, "Print");
+    assert_eq!(arguments[0], 2.into());
+    let Value::Labeled { label, arguments } = &arguments[1] else {
+        panic!()
+    };
+    assert_eq!(label.name, "None");
+    assert_eq!(arguments, &vec![]);
+}
