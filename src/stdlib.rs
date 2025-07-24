@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::context::{Context, Module};
-use crate::value::{BuiltinDefinition, Label, LabelFunc, Value};
+use crate::value::{BuiltinDefinition, Label, LabelFunc, PLabel, Value};
 
 impl Module {
     pub fn insert(&mut self, builtin: BuiltinDefinition) {
@@ -32,20 +32,20 @@ fn stdlib() -> Module {
         }),
     });
 
-    let none = Rc::new(Label {
+    let none = PLabel::from(Label {
         name: "None".into(),
         parameters: vec![],
     });
-    let print = Rc::new(Label {
+    let print = PLabel::from(Label {
         name: "Print".into(),
         parameters: vec!["value".to_string(), "next".to_string()],
     });
-    let input = Rc::new(Label {
+    let input = PLabel::from(Label {
         name: "Input".into(),
         parameters: vec!["f".to_string()],
     });
     ret.values.extend([
-        ("None".into(), LabelFunc::from(none).into()),
+        ("None".into(), Value::Labeled { label: none, arguments: vec![] }),
         ("Print".into(), LabelFunc::from(print).into()),
         ("Input".into(), LabelFunc::from(input).into()),
     ]);

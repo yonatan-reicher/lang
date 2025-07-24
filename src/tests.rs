@@ -65,7 +65,10 @@ fn test_label() {
 
 #[test]
 fn test_print() {
-    let stdout = execute_string("print (Print 2 None);").unwrap();
+    let stdout = execute_string(indoc! {r"
+        import stdlib exposing (Print None);
+        print (Print 2 None);
+    "}).unwrap();
     dbg!(&stdout);
     let Value::Labeled { label, arguments } = &stdout[0] else {
         panic!()
@@ -73,6 +76,7 @@ fn test_print() {
     assert_eq!(label.name, "Print");
     assert_eq!(arguments[0], 2.into());
     let Value::Labeled { label, arguments } = &arguments[1] else {
+        dbg!(&arguments[1]);
         panic!()
     };
     assert_eq!(label.name, "None");
