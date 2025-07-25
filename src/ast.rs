@@ -1,7 +1,8 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub module_decl: Option<ModuleDecl>,
-    pub statement: Vec<Statement>,
+    pub statements: Vec<Statement>,
+    pub return_expr: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

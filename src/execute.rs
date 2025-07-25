@@ -34,7 +34,10 @@ impl Statement {
                 });
                 // The value we are introducing to the context.
                 let value = if parameters.is_empty() {
-                    Value::Labeled { label, arguments: vec![] }
+                    Value::Labeled {
+                        label,
+                        arguments: vec![],
+                    }
                 } else {
                     LabelFunc::from(label).into()
                 };
@@ -47,10 +50,11 @@ impl Statement {
 }
 
 impl Program {
-    pub fn execute(&self, context: &mut Context) {
-        for statement in &self.statement {
+    pub fn execute(&self, context: &mut Context) -> Option<Value> {
+        for statement in &self.statements {
             statement.execute(context);
         }
+        self.return_expr.clone().map(|e| e.eval(context))
     }
 }
 
@@ -88,7 +92,7 @@ mod tests {
         use Statement::*;
         let program = Program {
             module_decl: None,
-            statement: vec![
+            statements: vec![
                 Assignment("x".to_string(), Int(10)),
                 Assignment("y".to_string(), Str("10".into())),
                 Assignment(
@@ -100,6 +104,7 @@ mod tests {
                     ),
                 ),
             ],
+            return_expr: None,
         };
         let mut context = Context::default();
         program.execute(&mut context);

@@ -1,6 +1,7 @@
 //! This module is responsible for parsing from source code to AST.
 
 use crate::ast::{BinOp, Expr, ModuleDecl, Program, Statement};
+use derive_more::From;
 use nessie_parse::{ParseResult, one_of};
 use thiserror::Error;
 
@@ -17,8 +18,6 @@ pub enum Error {
     PrintStatementExpectsSingleArgument,
     #[error("Assignment statement expected an expression")]
     AssignmentStatementExpectsExpression,
-    #[error("Bad statement")]
-    BadStatement,
     #[error("Did not find function body")]
     NoFunctionBody,
     #[error("Expected to a see a name after `module` keyword")]
@@ -35,6 +34,10 @@ pub enum Error {
     ExportingMissingRParen,
     #[error("Missing semicolon ';' at the end of the statement")]
     MissingSemicolon,
+    #[error("Expected a statement or an expression after a module declartion")]
+    ExpectedAStatementOrExprAfterModuleDecl,
+    #[error("there should be a statement, expression, or module declaration here")]
+    ExpectedAStatementExprOrModuleDecl,
 }
 
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
@@ -286,24 +289,52 @@ fn label_statement<'a>() -> Parser<'a, Statement> {
 }
 
 /// This parser never fails, always returns or errs.
-fn statement<'a>() -> Parser<'a, Statement> {
+struct NotAStatement;
+fn statement<'a>() -> Parser<'a, Statement, NotAStatement> {
     one_of![
         print_statement(),
         import_statement(),
         label_statement(),
         assignment_statement(),
-        Parser::err(Error::BadStatement),
     ]
-    .map_fail(|_| unreachable!())
+    .map_fail(|_| NotAStatement)
     .and_then(|s| {
         token_eq(Token::Semicolon)
             .or_err(Error::MissingSemicolon)
+            .map_fail(|_| unreachable!())
             .map(move |_| s.clone())
     })
 }
 
-fn statement_but_fails_on_eof<'a>() -> Parser<'a, Statement> {
-    (Parser::skip_whitespace().and_then(|()| Parser::eof().not())).and_then(|()| statement())
+#[derive(Clone, Debug, Default, From, PartialEq)]
+struct Block {
+    statements: Vec<Statement>,
+    return_expr: Option<Expr>,
+}
+fn block<'a>() -> Parser<'a, Block> {
+    one_of![
+        statement().map_fail(|_| ()).and_then(|statement| {
+            let statement_clone = statement.clone();
+            block()
+                .map(move |mut block| {
+                    block.statements.insert(0, statement.clone());
+                    block
+                })
+                .or(
+                    Parser::ret(Block {
+                        statements: vec![statement_clone.clone()],
+                        return_expr: None,
+                    }),
+                    |(), _, (), _| (),
+                )
+        }),
+        expr().map(|e| Block {
+            statements: vec![],
+            return_expr: Some(e),
+        }),
+        Parser::ret(Block::default()),
+    ]
+    .map_fail(|_| unreachable!())
 }
 
 fn module_exporting<'a>() -> Parser<'a, Vec<String>> {
@@ -330,12 +361,18 @@ fn module_declaration<'a>() -> Parser<'a, ModuleDecl> {
 
 fn program<'a>() -> Parser<'a, Program> {
     module_declaration().maybe().and_then(|module_decl| {
-        statement_but_fails_on_eof()
-            .repeat_0()
-            .map(move |statements| Program {
+        let err = if module_decl.is_some() {
+            Error::ExpectedAStatementOrExprAfterModuleDecl
+        } else {
+            Error::ExpectedAStatementExprOrModuleDecl
+        };
+        block()
+            .map(move |block| Program {
                 module_decl: module_decl.clone(),
-                statement: statements,
+                statements: block.statements,
+                return_expr: block.return_expr,
             })
+            .or_err(err)
     })
 }
 
@@ -459,7 +496,8 @@ mod tests {
                     name: "foo".to_string(),
                     exports: vec![],
                 }),
-                statement: vec![],
+                statements: vec![],
+                return_expr: None,
             })
         );
     }
@@ -475,7 +513,8 @@ mod tests {
                     name: "foo".to_string(),
                     exports: vec![],
                 }),
-                statement: vec![],
+                statements: vec![],
+                return_expr: None,
             }),
         );
     }
@@ -497,7 +536,7 @@ mod tests {
                     name: "modmod".to_string(),
                     exports: vec!["hello".into(), "friend".into()],
                 }),
-                statement: vec![
+                statements: vec![
                     Statement::Assignment("hello".to_string(), Expr::Int(2)),
                     Statement::Print(Expr::Var("hello".to_string())),
                     Statement::Assignment(
@@ -517,6 +556,22 @@ mod tests {
                         ),
                     ),
                 ],
+                return_expr: None,
+            }),
+        );
+    }
+
+    #[test]
+    fn parse_return_expr() {
+        assert_eq!(
+            parse(indoc! {r"
+                hello = 2;
+                hello
+            "}),
+            Ok(Program {
+                module_decl: None,
+                statements: vec![Statement::Assignment("hello".to_string(), Expr::Int(2))],
+                return_expr: Some(Expr::Var("hello".to_string())),
             }),
         );
     }

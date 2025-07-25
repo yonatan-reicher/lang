@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
-use std::io::{Write, stdin, stdout};
+use std::io::{Result as IoResult, Write, stdin, stdout};
 use std::path::PathBuf;
 use std::process::exit;
 
 use indoc::indoc;
 
 use lang::prelude::*;
+use lang::value::{Func, LabelFunc, PLabel};
 
 const USAGE: &str = indoc! {r"
     USAGE:
@@ -66,7 +67,60 @@ fn run_text(text: &str) {
     dbg!(&program);
     let mut context = Context::default();
     context.add_stdlib();
-    program.execute(&mut context);
+    let Some(ret) = program.execute(&mut context) else {
+        eprintln!("This program does not return a value");
+        exit(0);
+    };
+
+    execute_monad(&ret, &context).unwrap()
+}
+
+fn execute_monad(x: &Value, context: &Context) -> IoResult<()> {
+    fn lbl(value: &Value) -> Option<PLabel> {
+        if let Value::Func(Func::Label(LabelFunc { label, .. })) = value {
+            return Some(label.clone());
+        } else if let Value::Labeled { label, .. } = value {
+            return Some(label.clone());
+        }
+        None
+    }
+    fn lbl_stdlib(name: &'static str, context: &Context) -> Option<PLabel> {
+        lbl(context.modules["stdlib"].values.get(name)?)
+    }
+
+    let error = || {
+        eprintln!("Error: bad value '{x}'");
+        exit(1);
+    };
+
+    match x.clone() {
+        Value::Labeled { label, arguments } => {
+            // Print
+            if label == lbl_stdlib("Print", context).unwrap() {
+                let [value, next] = arguments.as_slice() else {
+                    panic!()
+                };
+                println!("{value}");
+                execute_monad(next, context)
+            // Input
+            } else if label == lbl_stdlib("Input", context).unwrap() {
+                let [Value::Func(f)] = arguments.as_slice() else {
+                    panic!()
+                };
+                let mut line = String::new();
+                stdin().read_line(&mut line).unwrap();
+                line = line.trim_end_matches("\r\n").trim_end_matches("\n").into();
+                let next = f.apply(line.into());
+                execute_monad(&next, context)
+            // None
+            } else if label == lbl_stdlib("None", context).unwrap() {
+                Ok(())
+            } else {
+                error()
+            }
+        }
+        _ => error(),
+    }
 }
 
 fn main() {
