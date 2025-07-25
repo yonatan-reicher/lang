@@ -31,6 +31,16 @@ fn stdlib() -> Module {
             (-i).into()
         }),
     });
+    ret.insert(BuiltinDefinition {
+        name: "fix".into(),
+        arity: 1,
+        func: Rc::new(|values| {
+            let [Value::Func(f)] = values else {
+                panic!("fix should be called with a single function argument");
+            };
+            f.apply(f.clone().into())
+        }),
+    });
 
     let none = PLabel::from(Label {
         name: "None".into(),
