@@ -1,10 +1,12 @@
+// std imports
 use std::collections::VecDeque;
-use std::io::{Result as IoResult, Write, stdin, stdout};
+use std::io::{Write, stdin, stdout};
 use std::path::PathBuf;
 use std::process::exit;
-
+// library imports
 use indoc::indoc;
-
+use thiserror::Error;
+// our imports
 use lang::prelude::*;
 use lang::value::{Func, LabelFunc, PLabel};
 
@@ -18,6 +20,16 @@ const USAGE: &str = indoc! {r"
     calling with a named file, but reads the contents from stdin instead of a file. Calling
     `lang repl` starts a Read-Eval-Print loop.
 "};
+
+#[derive(Debug, Error)]
+enum Error {
+    #[error("{0}")]
+    Eval(#[from] lang::eval::Error),
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug, Clone, PartialEq)]
 struct MainConfig {
@@ -59,7 +71,7 @@ impl MainConfig {
     }
 }
 
-fn run_text(text: &str) {
+fn run_text(text: &str) -> Result<()> {
     let program = parse(text).unwrap_or_else(|err| {
         eprintln!("Error parsing program: {err}");
         exit(1);
@@ -67,15 +79,17 @@ fn run_text(text: &str) {
     dbg!(&program);
     let mut context = Context::default();
     context.add_stdlib();
-    let Some(ret) = program.execute(&mut context) else {
+    let Some(ret) = program.execute(&mut context)? else {
         eprintln!("This program does not return a value");
         exit(0);
     };
 
-    execute_monad(&ret, &context).unwrap()
+    execute_monad(&ret, &context)?;
+
+    Ok(())
 }
 
-fn execute_monad(x: &Value, context: &Context) -> IoResult<()> {
+fn execute_monad(x: &Value, context: &Context) -> Result<()> {
     fn lbl(value: &Value) -> Option<PLabel> {
         if let Value::Func(Func::Label(LabelFunc { label, .. })) = value {
             return Some(label.clone());
@@ -110,7 +124,7 @@ fn execute_monad(x: &Value, context: &Context) -> IoResult<()> {
                 let mut line = String::new();
                 stdin().read_line(&mut line).unwrap();
                 line = line.trim_end_matches("\r\n").trim_end_matches("\n").into();
-                let next = f.apply(line.into());
+                let next = f.apply(line.into())?;
                 execute_monad(&next, context)
             // None
             } else if label == lbl_stdlib("None", context).unwrap() {
@@ -120,6 +134,16 @@ fn execute_monad(x: &Value, context: &Context) -> IoResult<()> {
             }
         }
         _ => error(),
+    }
+}
+
+fn handle_error<T, E: std::fmt::Display>(res: Result<T, E>) -> Option<T> {
+    match res {
+        Ok(value) => Some(value),
+        Err(err) => {
+            eprintln!("Error: {err}");
+            exit(1);
+        }
     }
 }
 
@@ -138,7 +162,7 @@ fn main() {
                 .map(|line| line.unwrap())
                 .collect::<Vec<_>>()
                 .join("\n");
-            run_text(&text)
+            handle_error(run_text(&text));
         }
         Command::File(path_buf) => {
             let text = std::fs::read_to_string(&path_buf).unwrap_or_else(|err| {
@@ -147,7 +171,7 @@ fn main() {
                 eprintln!("IO Error: {err}");
                 panic!();
             });
-            run_text(&text)
+            handle_error(run_text(&text));
         }
         Command::Repl => {
             let mut line = String::new();
@@ -159,7 +183,7 @@ fn main() {
                     .read_line(&mut line)
                     .expect("stdin should be readable");
                 // TODO
-                run_text(&line);
+                handle_error(run_text(&line));
             }
         }
         Command::Error(items) => {

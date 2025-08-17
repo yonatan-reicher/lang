@@ -1,16 +1,17 @@
 use crate::ast::{Program, Statement};
 use crate::context::Context;
 use crate::value::{Label, LabelFunc, PLabel, Value};
+use crate::eval;
 
 impl Statement {
-    pub fn execute(&self, context: &mut Context) {
+    pub fn execute(&self, context: &mut Context) -> eval::Result<()> {
         match self {
             Statement::Assignment(name, expr) => {
-                let value = expr.eval(context);
+                let value = expr.eval(context)?;
                 context.vars.insert(name.clone(), value);
             }
             Statement::Print(expr) => {
-                let value = expr.eval(context);
+                let value = expr.eval(context)?;
                 context.out.print(&value);
             }
             Statement::Import {
@@ -46,15 +47,16 @@ impl Statement {
                 context.vars.insert(name.clone(), value);
             }
         }
+        Ok(())
     }
 }
 
 impl Program {
-    pub fn execute(&self, context: &mut Context) -> Option<Value> {
+    pub fn execute(&self, context: &mut Context) -> eval::Result<Option<Value>> {
         for statement in &self.statements {
-            statement.execute(context);
+            statement.execute(context)?;
         }
-        self.return_expr.clone().map(|e| e.eval(context))
+        self.return_expr.clone().map(|e| e.eval(context)).transpose()
     }
 }
 

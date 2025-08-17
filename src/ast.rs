@@ -1,3 +1,5 @@
+use derive_more::Display;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub module_decl: Option<ModuleDecl>,
@@ -46,12 +48,18 @@ pub enum Expr {
     App(Vec<Expr>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
 pub enum BinOp {
+    #[display("+")]
     Add,
+    #[display("-")]
     Sub,
+    #[display("*")]
     Mul,
+    #[display("/")]
     Div,
+    #[display("=")]
     Eq,
+    #[display("&&")]
     And,
 }

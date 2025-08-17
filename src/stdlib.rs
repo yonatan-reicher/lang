@@ -18,7 +18,7 @@ fn stdlib() -> Module {
             let [Value::Int(i)] = values else {
                 panic!("AARG");
             };
-            i.abs().into()
+            Ok(i.abs().into())
         }),
     });
     ret.insert(BuiltinDefinition {
@@ -28,7 +28,7 @@ fn stdlib() -> Module {
             let [Value::Int(i)] = values else {
                 panic!("AARG");
             };
-            (-i).into()
+            Ok((-i).into())
         }),
     });
     ret.insert(BuiltinDefinition {

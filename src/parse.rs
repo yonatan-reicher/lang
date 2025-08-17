@@ -9,7 +9,7 @@ use thiserror::Error;
 pub enum Error {
     // TODO: Make this not hard-coded, or at least made in some reasonable way.
     #[error(
-        "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '=>', '+', '(' and  ')'"
+        "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '=>', '+', '-', '*', '/', '(' and  ')'"
     )]
     UnregocnizedToken,
     #[error("Expected a ')' here, because the expression ends here, but the ')' was not found")]
@@ -48,7 +48,6 @@ enum Token {
     Number(i64),
     Colon,
     Comma,
-    Eq,
     Exporting,
     Exposing,
     FatArrow,
@@ -58,7 +57,6 @@ enum Token {
     /// `(`
     LParen,
     Module,
-    Plus,
     Print,
     /// `}`
     RCurly,
@@ -66,6 +64,12 @@ enum Token {
     RParen,
     Semicolon,
     Label,
+    // Operators
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Eq,
 }
 
 /// Parse a token from the text!
@@ -132,6 +136,9 @@ fn token<'a>() -> Parser<'a, Token> {
                 symbol("=", Token::Eq),
                 symbol(",", Token::Comma),
                 symbol("+", Token::Plus),
+                symbol("-", Token::Minus),
+                symbol("*", Token::Star),
+                symbol("/", Token::Slash),
                 symbol("(", Token::LParen),
                 symbol(")", Token::RParen),
                 symbol("{", Token::LCurly),
@@ -190,6 +197,16 @@ fn application_expr_or_atom<'a>() -> Parser<'a, Expr> {
             Expr::App(atoms.clone())
         }
     })
+}
+
+fn binop<'a>() -> Parser<'a, BinOp> {
+    one_of![
+        token_eq(Token::Plus).map(|()| BinOp::Add),
+        token_eq(Token::Minus).map(|()| BinOp::Sub),
+        token_eq(Token::Star).map(|()| BinOp::Mul),
+        token_eq(Token::Slash).map(|()| BinOp::Div),
+        token_eq(Token::Eq).map(|()| BinOp::Eq),
+    ]
 }
 
 fn expr<'a>() -> Parser<'a, Expr> {

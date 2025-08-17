@@ -106,7 +106,7 @@ pub struct BuiltinDefinition {
     pub arity: u8,
     #[debug("{func:p}")]
     #[allow(clippy::type_complexity)]
-    pub func: Rc<dyn Fn(&[Value]) -> Value>,
+    pub func: Rc<dyn Fn(&[Value]) -> crate::eval::Result<Value>>,
 }
 
 /*
