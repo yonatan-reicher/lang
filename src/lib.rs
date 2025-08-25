@@ -12,6 +12,10 @@ pub mod stdlib;
 pub mod eval;
 /// Executing programs.
 pub mod execute;
+/// Implements a Read-Eval-Print-Loop that can execute commands
+pub mod repl;
+/// Executing Io operations represented as values.
+pub mod io_commands;
 
 pub fn execute_string(source_code: &str) -> Result<Vec<value::Value>, Box<dyn std::error::Error>> {
     let out = Default::default();
