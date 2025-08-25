@@ -240,7 +240,7 @@ impl Expr {
             Div => match (lhs, rhs()?) {
                 (Value::Int(l), Value::Int(r)) => {
                     if r == 0 {
-                        Err(Error::DivisionByZero { lhs: Value::Int(l) }.into())
+                        Err(Error::DivisionByZero { lhs: Value::Int(l) })
                     } else {
                         Ok(Value::Int(l / r))
                     }

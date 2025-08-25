@@ -22,7 +22,7 @@ pub fn execute_string(source_code: &str) -> Result<Vec<value::Value>, Box<dyn st
     };
     context.add_stdlib();
     let ast = parse::parse(source_code)?;
-    ast.execute(&mut context);
+    ast.execute(&mut context)?;
     let vec = std::mem::take(out.borrow_mut().as_mut());
     Ok(vec)
 }

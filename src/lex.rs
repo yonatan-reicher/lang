@@ -146,6 +146,7 @@ fn symbol<'a>(s: &'static str, ret: Token) -> Parser<'a, Token, NoSymbol> {
 /// A monolith error type for this parser.
 #[derive(Clone, Debug, Error, From, PartialEq)]
 #[error("{0}")]
+#[allow(private_interfaces)]
 pub enum Error {
     #[error("{0}")]
     NoIdentifier(NoIdentifier),

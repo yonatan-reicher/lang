@@ -81,8 +81,8 @@ mod tests {
         }
         .mutate(Context::add_stdlib);
 
-        s1.execute(&mut context); // x = 100;
-        s2.execute(&mut context); // print x;
+        s1.execute(&mut context).unwrap(); // x = 100;
+        s2.execute(&mut context).unwrap(); // print x;
         assert_eq!(context.vars.get("x"), Some(&Value::Int(100)));
         assert_eq!(out.borrow().as_ref(), [Value::Int(100)]);
     }
@@ -109,7 +109,7 @@ mod tests {
             return_expr: None,
         };
         let mut context = Context::default();
-        program.execute(&mut context);
+        program.execute(&mut context).unwrap();
         assert_eq!(context.vars.get("x"), Some(&Value::Bool(false)));
     }
 }

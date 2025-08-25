@@ -210,6 +210,7 @@ fn binop_expr<'a>() -> Parser<'a, Expr, NoBinOpExpr> {
 
 // TODO
 derive_all![ - Default
+    #[allow(private_interfaces)]
     pub enum ExprFailure {
         #[error("{0}")]
         NoFunction(NoFunction),
