@@ -68,12 +68,10 @@ type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
 
 macro_rules! derive_all {
     ( - Default /* Should be an item */ $($token:tt)* ) => {
-        // TODO: Do we want to take `Default` out?
         #[derive(Clone, Debug, Error, From, PartialEq, Eq)]
         $($token)*
     };
     ( /* Should be an item */ $($token:tt)* ) => {
-        // TODO: Do we want to take `Default` out?
         #[derive(Clone, Debug, Default, Error, From, PartialEq, Eq)]
         $($token)*;
     };
