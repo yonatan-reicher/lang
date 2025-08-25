@@ -1,19 +1,36 @@
 //! This module is responsible for parsing from source code to AST.
 
+// use from this crate
 use crate::ast::{BinOp, Expr, ModuleDecl, Program, Statement};
+use crate::lex::{token, token_eq, token_ident, EofFail, Error as LexError, Token};
+// use libraries
 use derive_more::From;
 use nessie_parse::{ParseResult, one_of};
 use thiserror::Error;
 
+// This parser is built on top of Nessie Parse. Parsers can either return, fail,
+// or error. The difference between failure and error is that failures are
+// supposed to be recovered from.
+//
+// In this module, we use a single, massive, error type, but use smaller failure
+// types. The failure types act as documentation as to when a different
+// syntactic element should be parsed. For example, a number parser might fail
+// with a failure like NotANumber, and a literal parser might fail with an enum
+// that would have NotANumber as one of the cases.
+
+/// A monolith error type for this parser.
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum Error {
-    // TODO: Make this not hard-coded, or at least made in some reasonable way.
-    #[error(
-        "Unrecognized token: valid tokens are numbers, identifiers, and symbols ';', ':', '=', '=>', '+', '-', '*', '/', '(' and  ')'"
-    )]
-    UnregocnizedToken,
+    #[error("Unrecognized token: {0}")]
+    UnregocnizedToken(LexError),
+    // atom: ( expr )
+    #[error("Expected an expression after '('. No expression because: {0}")]
+    NoExprAfterLParen(ExprFailure),
     #[error("Expected a ')' here, because the expression ends here, but the ')' was not found")]
-    MissingParen,
+    MissingRParen,
+    // binop expr
+    #[error("Missing expression after binary operator")]
+    MissingExprAfterBinOp(ExprFailure),
     #[error("Print statement expects a single argument (print x)")]
     PrintStatementExpectsSingleArgument,
     #[error("Assignment statement expected an expression")]
@@ -40,155 +57,84 @@ pub enum Error {
     ExpectedAStatementExprOrModuleDecl,
 }
 
+impl From<LexError> for Error {
+    fn from(e: LexError) -> Self {
+        Error::UnregocnizedToken(e)
+    }
+}
+
+/// The parser type we use.
 type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Token {
-    Ident(String),
-    Number(i64),
-    Colon,
-    Comma,
-    Exporting,
-    Exposing,
-    FatArrow,
-    Import,
-    /// `{`
-    LCurly,
-    /// `(`
-    LParen,
-    Module,
-    Print,
-    /// `}`
-    RCurly,
-    /// `)`
-    RParen,
-    Semicolon,
-    Label,
-    // Operators
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Eq,
+macro_rules! derive_all {
+    ( - Default /* Should be an item */ $($token:tt)* ) => {
+        // TODO: Do we want to take `Default` out?
+        #[derive(Clone, Debug, Error, From, PartialEq, Eq)]
+        $($token)*
+    };
+    ( /* Should be an item */ $($token:tt)* ) => {
+        // TODO: Do we want to take `Default` out?
+        #[derive(Clone, Debug, Default, Error, From, PartialEq, Eq)]
+        $($token)*;
+    };
 }
 
-/// Parse a token from the text!
-fn token<'a>() -> Parser<'a, Token> {
-    fn number<'a>() -> Parser<'a, i64> {
-        fn vec_to_string(vec: Vec<char>) -> String {
-            vec.iter().cloned().collect()
-        }
+fn default<T: Default>() -> T { T::default() }
 
-        Parser::digit()
-            .map_fail(|_| ())
-            .repeat_1()
-            .map(vec_to_string)
-            .map(|s| s.parse::<i64>().unwrap())
-    }
+derive_all![
+    #[error("does not begin with '('")]
+    struct NoLParen
+];
+derive_all![
+    #[error("does not begin with a number")]
+    struct NoNumber
+];
+derive_all![
+    #[error("does not begin with an identifier")]
+    struct NoIdent
+];
+derive_all![
+    #[error("{0}, {1}, {2}")]
+    struct NoAtom(NoLParen, NoNumber, NoIdent)
+];
 
-    fn identifier_or_keyword<'a>() -> Parser<'a, Token> {
-        fn start_char<'a>() -> Parser<'a, char> {
-            Parser::char()
-                .map_fail(|_| ())
-                .filter(|&c| c.is_alphabetic() || c == '_', ())
-        }
-
-        fn end_char<'a>() -> Parser<'a, char> {
-            Parser::char()
-                .map_fail(|_| ())
-                .filter(|&c| c.is_alphanumeric() || c == '_', ())
-        }
-
-        start_char()
-            .and_then(|start_char| {
-                end_char().repeat_0().map(move |end_chars| {
-                    let mut identifier = String::new();
-                    identifier.push(start_char);
-                    identifier.extend(end_chars);
-                    identifier
-                })
-            })
-            // Keywords should be added here!
-            .map(|ident| match ident.as_str() {
-                "exporting" => Token::Exporting,
-                "exposing" => Token::Exposing,
-                "import" => Token::Import,
-                "module" => Token::Module,
-                "print" => Token::Print,
-                "label" => Token::Label,
-                _ => Token::Ident(ident),
-            })
-    }
-
-    fn symbol<'a>(s: &'static str, ret: Token) -> Parser<'a, Token> {
-        Parser::expect_string(s)
-            .map(move |()| ret.clone())
-            .map_fail(|_| ())
-    }
-
-    Parser::skip_whitespace()
-        .and_then(|()| Parser::eof().not().map_fail(|()| ()))
-        .and_then(|()| {
-            one_of![
-                symbol(";", Token::Semicolon),
-                symbol(":", Token::Colon),
-                symbol("=>", Token::FatArrow),
-                symbol("=", Token::Eq),
-                symbol(",", Token::Comma),
-                symbol("+", Token::Plus),
-                symbol("-", Token::Minus),
-                symbol("*", Token::Star),
-                symbol("/", Token::Slash),
-                symbol("(", Token::LParen),
-                symbol(")", Token::RParen),
-                symbol("{", Token::LCurly),
-                symbol("}", Token::RCurly),
-                identifier_or_keyword(),
-                number().map(Token::Number),
-                Parser::err(Error::UnregocnizedToken),
-            ]
-            .map_fail(|_| unreachable!())
-        })
-}
-
-fn token_eq<'a>(t: Token) -> Parser<'a, ()> {
-    token().filter(move |t1| t1 == &t, ()).map(|_| ())
-}
-
-fn token_ident<'a>() -> Parser<'a, String> {
-    token().and_then(|token| match token {
-        Token::Ident(ident) => Parser::ret(ident),
-        _ => Parser::fail(()),
-    })
-}
-
-fn atom<'a>() -> Parser<'a, Expr> {
-    token().and_then(|token| match token {
-        Token::LParen => expr().and_then(|expr| {
-            token_eq(Token::RParen)
-                .map(move |_| expr.clone())
-                .or_err(Error::MissingParen)
-        }),
+fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
+    token().or_fail(default()).map_err(Error::from).and_then(|token| match token {
+        Token::LParen => expr()
+            .and_then_fail(|f| Parser::err(Error::NoExprAfterLParen(f)))
+            .and_then(|expr| {
+                token_eq::<()>(Token::RParen)
+                    .map_err(Error::from)
+                    .map(move |_| expr.clone())
+                    .or_err(Error::MissingRParen)
+            }),
         Token::Number(n) => Parser::ret(Expr::Int(n)),
         Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
-        _ => Parser::fail(()),
+        _ => Parser::fail(NoAtom::default()),
     })
 }
 
-fn function_expr<'a>() -> Parser<'a, Expr> {
-    token_ident().and_then(|param_name| {
-        token_eq(Token::FatArrow).and_then(move |()| {
-            let param_name = param_name.clone();
-            expr().or_err(Error::NoFunctionBody).map(move |body| {
-                let name = param_name.clone();
-                let body = body.clone();
-                Expr::Func(name, body.into())
+derive_all![
+    #[error("does not begin with `<ident> =>`")]
+    struct NoFunction
+];
+
+fn function_expr<'a>() -> Parser<'a, Expr, NoFunction> {
+    token_ident().map_err(Error::from).and_then(|param_name| {
+        token_eq(Token::FatArrow)
+            .map_err(Error::from)
+            .and_then(move |()| {
+                let param_name = param_name.clone();
+                expr().or_err(Error::NoFunctionBody).map(move |body| {
+                    let name = param_name.clone();
+                    let body = body.clone();
+                    Expr::Func(name, body.into())
+                })
             })
-        })
     })
 }
 
-fn application_expr_or_atom<'a>() -> Parser<'a, Expr> {
+fn application_expr_or_atom<'a>() -> Parser<'a, Expr, NoAtom> {
     atom().repeat_1().map(|atoms| {
         debug_assert!(!atoms.is_empty(), "repeat_1 always returns non-empty");
         if let [lonely_atom] = atoms.as_slice() {
@@ -199,32 +145,91 @@ fn application_expr_or_atom<'a>() -> Parser<'a, Expr> {
     })
 }
 
-fn binop<'a>() -> Parser<'a, BinOp> {
-    one_of![
-        token_eq(Token::Plus).map(|()| BinOp::Add),
-        token_eq(Token::Minus).map(|()| BinOp::Sub),
-        token_eq(Token::Star).map(|()| BinOp::Mul),
-        token_eq(Token::Slash).map(|()| BinOp::Div),
-        token_eq(Token::Eq).map(|()| BinOp::Eq),
-    ]
+static BINARY_OP_MAP: &[(Token, BinOp)] = &[
+    (Token::Plus, BinOp::Add),
+    (Token::Minus, BinOp::Sub),
+    (Token::Star, BinOp::Mul),
+    (Token::Slash, BinOp::Div),
+    (Token::Eq, BinOp::Eq),
+];
+
+fn binops() -> String {
+    BINARY_OP_MAP
+        .iter()
+        .map(|(_, r)| r.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
-fn expr<'a>() -> Parser<'a, Expr> {
+derive_all![ - Default
+    #[error("not a binary operator (options are {})", binops())]
+    enum NotABinOp {
+        Token(Token),
+        Eof(EofFail),
+    }
+];
+
+fn binop<'a>() -> Parser<'a, BinOp, NotABinOp> {
+    token().map_fail(From::from).map_err(Error::from).and_then(|token| {
+        for (t, op) in BINARY_OP_MAP {
+            if t == &token {
+                return Parser::ret(*op);
+            }
+        }
+        Parser::fail(token.into())
+    })
+}
+
+derive_all![ - Default
+    enum NoBinOpExpr {
+        #[error("lhs is not an atom: {0}")]
+        NoLhsAtom(NoAtom),
+        #[error("{0}")]
+        NoBinOp(NotABinOp),
+    }
+];
+
+fn binop_expr<'a>() -> Parser<'a, Expr, NoBinOpExpr> {
+    atom().map_fail(Into::into).and_then(|left| {
+        binop().map_fail(Into::into).and_then(move |op| {
+            let left = left.clone();
+            expr()
+                .and_then_fail(|f| Parser::err(Error::MissingExprAfterBinOp(f)))
+                .map(move |right| Expr::BinOp(Box::new(left.clone()), op, Box::new(right)))
+        })
+    })
+}
+
+// TODO
+derive_all![ - Default
+    pub enum ExprFailure {
+        #[error("{0}")]
+        NoFunction(NoFunction),
+        #[error("{0}")]
+        NoAtom(NoAtom),
+        #[error("{0}")]
+        NoBinOpExpr(NoBinOpExpr),
+        #[error("todo")] // TODO:
+        Many(Vec<ExprFailure>),
+    }
+];
+
+impl nessie_parse::CombineManyFail<'_, ExprFailure> for ExprFailure {
+    fn combine_many_fail(fails: Vec<(Self, nessie_parse::State<'_>)>) -> Self {
+        Self::Many(ExprFailure::combine_many_fail(fails))
+    }
+}
+
+fn expr<'a>() -> Parser<'a, Expr, ExprFailure> {
     one_of![
-        function_expr(),
-        atom().and_then(|left| {
-            token_eq(Token::Plus)
-                .and_then(move |_| expr())
-                .map(move |right| Expr::BinOp(Box::new(left.clone()), BinOp::Add, Box::new(right)))
-        }),
-        application_expr_or_atom(),
-        atom(),
+        function_expr().map_fail(ExprFailure::from),
+        binop_expr().map_fail(ExprFailure::from),
+        application_expr_or_atom().map_fail(ExprFailure::from),
     ]
-    .map_fail(|_| ())
 }
 
 fn print_statement<'a>() -> Parser<'a, Statement> {
-    token_eq(Token::Print).and_then(|()| {
+    token_eq(Token::Print).map_err(Error::from).and_then(|()| {
         atom()
             .map(Statement::Print)
             .or_err(Error::PrintStatementExpectsSingleArgument)
@@ -232,8 +237,8 @@ fn print_statement<'a>() -> Parser<'a, Statement> {
 }
 
 fn assignment_statement<'a>() -> Parser<'a, Statement> {
-    token_ident().and_then(|ident| {
-        token_eq(Token::Eq).and_then(move |_| {
+    token_ident().map_err(Error::from).and_then(|ident| {
+        token_eq(Token::Eq).map_err(Error::from).and_then(move |_| {
             let ident = ident.clone();
             expr()
                 .or_err(Error::AssignmentStatementExpectsExpression)
@@ -249,31 +254,39 @@ fn parenthesis_name_list<'a>(
     on_missing_right_paren: fn() -> Error,
 ) -> Parser<'a, Vec<String>> {
     // (
-    token_eq(Token::LParen)
+    token_eq::<()>(Token::LParen)
+        .map_err(Error::from)
         .or_err(on_missing_left_paren())
         .and_then(move |()| {
             // exporting ( f g h
-            token_ident().repeat_0().and_then(move |names| {
-                // exporting ( f g h )
-                token_eq(Token::RParen)
-                    .or_err(on_missing_right_paren())
-                    .map(move |()| names.clone())
-            })
+            token_ident::<()>()
+                .map_err(Error::from)
+                .repeat_0()
+                .and_then(move |names| {
+                    // exporting ( f g h )
+                    token_eq::<()>(Token::RParen)
+                        .map_err(Error::from)
+                        .or_err(on_missing_right_paren())
+                        .map(move |()| names.clone())
+                })
         })
 }
 
 fn import_exposing<'a>() -> Parser<'a, Vec<String>> {
-    token_eq(Token::Exposing).and_then(|()| {
-        parenthesis_name_list(
-            || Error::ExportingMissingLParen,
-            || Error::ExportingMissingRParen,
-        )
-    })
+    token_eq(Token::Exposing)
+        .map_err(Error::from)
+        .and_then(|()| {
+            parenthesis_name_list(
+                || Error::ExportingMissingLParen,
+                || Error::ExportingMissingRParen,
+            )
+        })
 }
 
 fn import_statement<'a>() -> Parser<'a, Statement> {
-    token_eq(Token::Import).and_then(|()| {
-        token_ident()
+    token_eq(Token::Import).map_err(Error::from).and_then(|()| {
+        token_ident::<()>()
+            .map_err(Error::from)
             .or_err(Error::ExpectedModuleNameImport)
             .and_then(|module_name| {
                 import_exposing().maybe().map(move |exposing| {
@@ -289,13 +302,14 @@ fn import_statement<'a>() -> Parser<'a, Statement> {
 
 fn label_statement<'a>() -> Parser<'a, Statement> {
     // label
-    token_eq(Token::Label).and_then(|()| {
+    token_eq(Token::Label).map_err(Error::from).and_then(|()| {
         // label Cons
         // token_ident().or_err(todo!()).and_then(|name| {
-        token_ident().and_then(|name| {
+        token_ident().map_err(Error::from).and_then(|name| {
             let name = name.clone();
             // label Cons head tail
-            token_ident()
+            token_ident::<()>()
+                .map_err(Error::from)
                 .repeat_0()
                 .map(move |parameters| Statement::Label {
                     name: name.clone(),
@@ -314,11 +328,13 @@ fn statement<'a>() -> Parser<'a, Statement, NotAStatement> {
         label_statement(),
         assignment_statement(),
     ]
-    .map_fail(|_| NotAStatement)
+    .map_fail(|()| NotAStatement)
     .and_then(|s| {
-        token_eq(Token::Semicolon)
+        // TODO: Make token_eq and all token* functions return a more generic type using Into, so
+        // we can get rid of all these .map_err
+        token_eq::<()>(Token::Semicolon)
+            .map_err(Error::from)
             .or_err(Error::MissingSemicolon)
-            .map_fail(|_| unreachable!())
             .map(move |_| s.clone())
     })
 }
@@ -328,44 +344,49 @@ struct Block {
     statements: Vec<Statement>,
     return_expr: Option<Expr>,
 }
-fn block<'a>() -> Parser<'a, Block> {
+
+/// Parse a block - a series of statements, maybe followed by a returned
+/// expression. Does not parse any braces or delimiters around.
+fn block<'a, F: 'a>() -> Parser<'a, Block, F> {
     one_of![
         statement().map_fail(|_| ()).and_then(|statement| {
             let statement_clone = statement.clone();
-            block()
+            block::<()>()
                 .map(move |mut block| {
                     block.statements.insert(0, statement.clone());
                     block
                 })
-                .or(
-                    Parser::ret(Block {
-                        statements: vec![statement_clone.clone()],
-                        return_expr: None,
-                    }),
-                    |(), _, (), _| (),
-                )
+                .or_ret(Block {
+                    statements: vec![statement_clone.clone()],
+                    return_expr: None,
+                })
         }),
-        expr().map(|e| Block {
-            statements: vec![],
-            return_expr: Some(e),
-        }),
-        Parser::ret(Block::default()),
+        expr()
+            .map(|e| Block {
+                statements: vec![],
+                return_expr: Some(e),
+            })
+            .or_fail(()),
     ]
-    .map_fail(|_| unreachable!())
+    .map_fail(|()| ()) // Annotate the failure type
+    .or_ret(Block::default())
 }
 
 fn module_exporting<'a>() -> Parser<'a, Vec<String>> {
-    token_eq(Token::Exporting).and_then(|()| {
-        parenthesis_name_list(
-            || Error::ExportingMissingLParen,
-            || Error::ExportingMissingRParen,
-        )
-    })
+    token_eq(Token::Exporting)
+        .map_err(Error::from)
+        .and_then(|()| {
+            parenthesis_name_list(
+                || Error::ExportingMissingLParen,
+                || Error::ExportingMissingRParen,
+            )
+        })
 }
 
 fn module_declaration<'a>() -> Parser<'a, ModuleDecl> {
-    token_eq(Token::Module).and_then(|()| {
-        token_ident()
+    token_eq(Token::Module).map_err(Error::from).and_then(|()| {
+        token_ident::<()>()
+            .map_err(Error::from)
             .or_err(Error::ExpectedModuleName)
             .and_then(|name| {
                 module_exporting().maybe().map(move |exports| ModuleDecl {
@@ -383,7 +404,7 @@ fn program<'a>() -> Parser<'a, Program> {
         } else {
             Error::ExpectedAStatementExprOrModuleDecl
         };
-        block()
+        block::<()>()
             .map(move |block| Program {
                 module_decl: module_decl.clone(),
                 statements: block.statements,
@@ -411,48 +432,6 @@ mod tests {
     use super::*;
     use indoc::indoc;
     use nessie_parse::{ParseResult, Pos};
-
-    #[test]
-    fn test_number_token() {
-        let res = token().parse(
-            indoc! {r"
-                1234
-            "}
-            .into(),
-        );
-        assert_eq!(
-            res,
-            ParseResult::Ok(
-                Token::Number(1234),
-                Pos {
-                    row: 1,
-                    col: 5,
-                    offset: 4
-                },
-            ),
-        );
-    }
-
-    #[test]
-    fn token_left_paren() {
-        let res = token().parse(
-            indoc! {r"
-                (
-            "}
-            .into(),
-        );
-        assert_eq!(
-            res,
-            ParseResult::Ok(
-                Token::LParen,
-                Pos {
-                    offset: 1,
-                    row: 1,
-                    col: 2,
-                },
-            ),
-        );
-    }
 
     #[test]
     fn number_atom() {

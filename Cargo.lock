@@ -61,10 +61,11 @@ dependencies = [
 
 [[package]]
 name = "nessie-parse"
-version = "0.1.3"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b30fbfaa7cf5a984be639b2cb79d332574f964194fa91e31df5cb29628b4004"
+checksum = "3a130f65a812b1901db9a9b6088261ad029ec6a115bcf095f0c005016d4b991e"
 dependencies = [
+ "derive_more",
  "functionality",
  "indoc",
 ]
