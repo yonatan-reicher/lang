@@ -137,9 +137,9 @@ fn execute_monad(x: &Value, context: &Context) -> Result<()> {
     }
 }
 
-fn handle_error<T, E: std::fmt::Display>(res: Result<T, E>) -> Option<T> {
+fn handle_error<T, E: std::fmt::Display>(res: Result<T, E>) -> T {
     match res {
-        Ok(value) => Some(value),
+        Ok(value) => value,
         Err(err) => {
             eprintln!("Error: {err}");
             exit(1);
