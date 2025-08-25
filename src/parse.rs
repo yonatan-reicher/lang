@@ -2,7 +2,7 @@
 
 // use from this crate
 use crate::ast::{BinOp, Expr, ModuleDecl, Program, Statement};
-use crate::lex::{token, token_eq, token_ident, EofFail, Error as LexError, Token};
+use crate::lex::{EofFail, Error as LexError, Token, token, token_eq, token_ident};
 // use libraries
 use derive_more::From;
 use nessie_parse::{ParseResult, one_of};
@@ -79,7 +79,9 @@ macro_rules! derive_all {
     };
 }
 
-fn default<T: Default>() -> T { T::default() }
+fn default<T: Default>() -> T {
+    T::default()
+}
 
 derive_all![
     #[error("does not begin with '('")]
@@ -99,19 +101,22 @@ derive_all![
 ];
 
 fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
-    token().or_fail(default()).map_err(Error::from).and_then(|token| match token {
-        Token::LParen => expr()
-            .and_then_fail(|f| Parser::err(Error::NoExprAfterLParen(f)))
-            .and_then(|expr| {
-                token_eq::<()>(Token::RParen)
-                    .map_err(Error::from)
-                    .map(move |_| expr.clone())
-                    .or_err(Error::MissingRParen)
-            }),
-        Token::Number(n) => Parser::ret(Expr::Int(n)),
-        Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
-        _ => Parser::fail(NoAtom::default()),
-    })
+    token()
+        .or_fail(default())
+        .map_err(Error::from)
+        .and_then(|token| match token {
+            Token::LParen => expr()
+                .and_then_fail(|f| Parser::err(Error::NoExprAfterLParen(f)))
+                .and_then(|expr| {
+                    token_eq::<()>(Token::RParen)
+                        .map_err(Error::from)
+                        .map(move |_| expr.clone())
+                        .or_err(Error::MissingRParen)
+                }),
+            Token::Number(n) => Parser::ret(Expr::Int(n)),
+            Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
+            _ => Parser::fail(NoAtom::default()),
+        })
 }
 
 derive_all![
@@ -170,14 +175,17 @@ derive_all![ - Default
 ];
 
 fn binop<'a>() -> Parser<'a, BinOp, NotABinOp> {
-    token().map_fail(From::from).map_err(Error::from).and_then(|token| {
-        for (t, op) in BINARY_OP_MAP {
-            if t == &token {
-                return Parser::ret(*op);
+    token()
+        .map_fail(From::from)
+        .map_err(Error::from)
+        .and_then(|token| {
+            for (t, op) in BINARY_OP_MAP {
+                if t == &token {
+                    return Parser::ret(*op);
+                }
             }
-        }
-        Parser::fail(token.into())
-    })
+            Parser::fail(token.into())
+        })
 }
 
 derive_all![ - Default
@@ -568,6 +576,33 @@ mod tests {
                 module_decl: None,
                 statements: vec![Statement::Assignment("hello".to_string(), Expr::Int(2))],
                 return_expr: Some(Expr::Var("hello".to_string())),
+            }),
+        );
+    }
+
+    #[test]
+    fn parse_binary_operator_expr() {
+        // As you can see, binary operators are (for now) parsed precedence-less
+        assert_eq!(
+            parse(indoc! {r"
+                1 + 2 * 3 + 1
+            "}),
+            Ok(Program {
+                module_decl: None,
+                statements: vec![],
+                return_expr: Some(Expr::BinOp(
+                    Box::new(1.into()),
+                    BinOp::Add,
+                    Box::new(Expr::BinOp(
+                        Box::new(2.into()),
+                        BinOp::Mul,
+                        Box::new(Expr::BinOp(
+                            Box::new(3.into()),
+                            BinOp::Add,
+                            Box::new(1.into()),
+                        )),
+                    )),
+                ),),
             }),
         );
     }
