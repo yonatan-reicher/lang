@@ -2,6 +2,7 @@ use derive_more::{Debug, Deref, Display, From};
 use std::rc::Rc;
 
 fn display_applied(name: impl std::fmt::Display, args: &[impl std::fmt::Display]) -> String {
+    if args.is_empty() { return format!("{name}"); }
     let arg_strings: Vec<String> = args.iter().map(|x| x.to_string()).collect();
     format!("({name} {})", arg_strings.join(" "))
 }
