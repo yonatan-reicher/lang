@@ -27,7 +27,7 @@ pub struct Module {
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Context {
-    pub vars: std::collections::HashMap<String, Value>,
+    pub vars: HashMap<String, Value>,
     pub modules: HashMap<String, Module>,
     pub out: PrintOutput,
 }
