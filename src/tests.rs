@@ -82,3 +82,32 @@ fn test_print() {
     assert_eq!(label.name, "None");
     assert_eq!(arguments, &vec![]);
 }
+
+#[test]
+fn test_match() {
+    let stdout = execute_string(indoc! {r#"
+        label A;
+        label B;
+        print (
+            match B
+            | A => 42
+            | B => 69
+        );
+    "#}).unwrap();
+    dbg!(&stdout);
+    assert_eq!(stdout, vec![69.into()]);
+}
+
+#[test]
+fn test_failed_match() {
+    let res = execute_string(indoc! {r#"
+        label A;
+        label B;
+        print (
+            match B
+            | A => 42
+        );
+    "#});
+    dbg!(&res);
+    assert!(res.is_err());
+}
