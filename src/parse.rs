@@ -1,7 +1,7 @@
 //! This module is responsible for parsing from source code to AST.
 
 // use from this crate
-use crate::ast::{BinOp, Expr, ModuleDecl, Program, Statement};
+use crate::ast::{BinOp, Expr, MatchArm, ModuleDecl, Pattern, Program, Statement};
 use crate::lex::{EofFail, Error as LexError, Token, token, token_eq, token_ident};
 // use libraries
 use derive_more::From;
@@ -55,6 +55,14 @@ pub enum Error {
     ExpectedAStatementOrExprAfterModuleDecl,
     #[error("there should be a statement, expression, or module declaration here")]
     ExpectedAStatementExprOrModuleDecl,
+    #[error("there should be an expression after the match keyword")]
+    NoExprAfterMatchKeyword(ExprFailure),
+    #[error("should have a pattern after the '|' symbol")]
+    MatchArmExpectedPatternAfterPipe,
+    #[error("should have a '=>' symbol after the pattern in a match arm")]
+    MatchArmExpectedArrowAfterPattern,
+    #[error("should have an expression after the '=>' symbol")]
+    MatchArmExpectedExprAfterArrow(ExprFailure),
 }
 
 impl From<LexError> for Error {
@@ -73,7 +81,7 @@ macro_rules! derive_all {
     };
     ( /* Should be an item */ $($token:tt)* ) => {
         #[derive(Clone, Debug, Default, Error, From, PartialEq, Eq)]
-        $($token)*;
+        $($token)*
     };
 }
 
@@ -83,19 +91,19 @@ fn default<T: Default>() -> T {
 
 derive_all![
     #[error("does not begin with '('")]
-    struct NoLParen
+    struct NoLParen;
 ];
 derive_all![
     #[error("does not begin with a number")]
-    struct NoNumber
+    struct NoNumber;
 ];
 derive_all![
     #[error("does not begin with an identifier")]
-    struct NoIdent
+    struct NoIdent;
 ];
 derive_all![
     #[error("{0}, {1}, {2}")]
-    struct NoAtom(NoLParen, NoNumber, NoIdent)
+    struct NoAtom(NoLParen, NoNumber, NoIdent);
 ];
 
 fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
@@ -119,7 +127,7 @@ fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
 
 derive_all![
     #[error("does not begin with `<ident> =>`")]
-    struct NoFunction
+    struct NoFunction;
 ];
 
 fn function_expr<'a>() -> Parser<'a, Expr, NoFunction> {
@@ -206,6 +214,52 @@ fn binop_expr<'a>() -> Parser<'a, Expr, NoBinOpExpr> {
     })
 }
 
+derive_all![
+    #[error("does not begin with the '|' symbol")]
+    pub struct NoPipe;
+];
+
+derive_all![
+    #[error("does not begin with the 'match' keyword")]
+    pub struct NoMatchKeyword;
+];
+
+fn match_arm<'a>() -> Parser<'a, MatchArm, NoPipe> {
+    // |
+    token_eq(Token::Pipe).map_err(From::from).and_then(|()| {
+        // | Cons head tail
+        pattern()
+            .and_then_fail(|_| Parser::err(Error::MatchArmExpectedPatternAfterPipe))
+            .and_then(|p| {
+                // | Cons head tail =>
+                token_eq::<()>(Token::FatArrow)
+                    .map_err(Error::from)
+                    .or_err(Error::MatchArmExpectedArrowAfterPattern)
+                    .and_then(move |()| {
+                        let p = p.clone();
+                        // | Cons head tail => head + sum tail
+                        expr()
+                            .and_then_fail(|f| {
+                                Parser::err(Error::MatchArmExpectedExprAfterArrow(f))
+                            })
+                            .map(move |e| MatchArm(p.clone(), e))
+                    })
+            })
+    })
+}
+
+fn match_expr<'a>() -> Parser<'a, Expr, NoMatchKeyword> {
+    token_eq(Token::Match).map_err(From::from).and_then(|()| {
+        expr()
+            .and_then_fail(|f| Parser::err(Error::NoExprAfterMatchKeyword(f)))
+            .and_then(|e| {
+                match_arm()
+                    .repeat_0()
+                    .map(move |arms| Expr::Match(Box::new(e.clone()), arms))
+            })
+    })
+}
+
 // TODO
 derive_all![ - Default
     #[allow(private_interfaces)]
@@ -216,6 +270,8 @@ derive_all![ - Default
         NoAtom(NoAtom),
         #[error("{0}")]
         NoBinOpExpr(NoBinOpExpr),
+        #[error("{0}")]
+        NoMatchKeyword(NoMatchKeyword),
         #[error("todo")] // TODO:
         Many(Vec<ExprFailure>),
     }
@@ -229,10 +285,55 @@ impl nessie_parse::CombineManyFail<'_, ExprFailure> for ExprFailure {
 
 fn expr<'a>() -> Parser<'a, Expr, ExprFailure> {
     one_of![
+        match_expr().map_fail(ExprFailure::from),
         function_expr().map_fail(ExprFailure::from),
         binop_expr().map_fail(ExprFailure::from),
         application_expr_or_atom().map_fail(ExprFailure::from),
     ]
+}
+
+/// A pattern atom is either a '_', a name, or a parenthesised pattern.
+fn pattern_atom<'a>() -> Parser<'a, Pattern, EofFail> {
+    one_of![
+        token_eq::<()>(Token::Underscore)
+            .map_err(From::from)
+            .map(|()| Pattern::Wildcard),
+        token_ident().map_err(From::from).map(|name| {
+            let is_label = name.chars().next().is_some_and(char::is_uppercase);
+            if is_label {
+                Pattern::Label {
+                    name,
+                    parameter_patterns: vec![],
+                }
+            } else {
+                Pattern::Var(name)
+            }
+        }),
+        token_eq(Token::LParen).map_err(From::from).and_then(|()| {
+            pattern().and_then_fail(|f| todo!()).and_then(|p| {
+                token_eq(Token::RParen)
+                    .map_err(From::from)
+                    .and_then_fail(|()| todo!())
+                    .map(move |()| p.clone())
+            })
+        })
+    ]
+    .map_fail(|()| EofFail)
+}
+
+fn pattern<'a>() -> Parser<'a, Pattern, EofFail> {
+    one_of![
+        token_ident().map_err(Error::from).and_then(|name| {
+            pattern_atom()
+                .repeat_1()
+                .map(move |parameter_patterns| Pattern::Label {
+                    name: name.clone(),
+                    parameter_patterns,
+                })
+        }),
+        pattern_atom(),
+    ]
+    .map_fail(|()| EofFail)
 }
 
 fn print_statement<'a>() -> Parser<'a, Statement> {

@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 // std imports
 use std::rc::Rc;
 // our imports
-use crate::ast::{BinOp, Expr};
+use crate::ast::{BinOp, Expr, MatchArm, Pattern};
 use crate::context::Context;
-use crate::value::{BuiltinFunc, Func, LabelFunc, LambdaFunc, Value};
+use crate::value::{BuiltinFunc, Func, LabelFunc, LambdaFunc, PLabel, Value};
 // other imports
 use functionality::{Mutate, Pipe};
 use thiserror::Error;
@@ -85,7 +86,8 @@ impl LotsOfParametersFunc for LabelFunc {
         Value::Labeled {
             label: self.label.clone(),
             arguments,
-        }.pipe(Ok)
+        }
+        .pipe(Ok)
     }
 
     fn arity(&self) -> u8 {
@@ -127,7 +129,8 @@ impl Func {
                         args: args.to_vec(),
                         returns: ret,
                         on_arg: i,
-                    }.into());
+                    }
+                    .into());
                 }
             };
             let applied = func.apply(arg.clone())?;
@@ -164,6 +167,12 @@ pub enum Error {
     BinOpError(#[from] BinOpError),
     #[error("division by zero - tried dividing '{lhs}' by '0'")]
     DivisionByZero { lhs: Value },
+    #[error("label '{name}' does not exist, but used in a pattern")]
+    LabelPatternNoSuchLabel { name: String },
+    #[error("label '{label}' has {} arguments, but used in a pattern with {args} arguments", label.parameters.len())]
+    LabelPatternWrongNumberOfArguments { label: PLabel, args: usize },
+    #[error("no match arm matched the value '{0}'")]
+    MatchExprMismatch(Value),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -204,6 +213,15 @@ impl Expr {
                     return Err(Error::NotAFunction { func: func.clone() });
                 };
                 func.apply_all(args)
+            }
+            Expr::Match(expr, arms) => {
+                let x = expr.eval(context)?;
+                for MatchArm(pat, ret) in arms {
+                    if let Some(to_add) = pat.matches(&x, context)? {
+                        return ret.eval(&context.clone().mutate(|c| c.vars.extend(to_add)));
+                    }
+                }
+                Err(Error::MatchExprMismatch(x))
             }
         }
     }
@@ -255,6 +273,46 @@ impl Expr {
                 Value::Bool(false) => Ok(Value::Bool(false)),
                 _ => Err(BinOpError::And { lhs: lhs.clone() }.into()),
             },
+        }
+    }
+}
+
+impl Pattern {
+    /// This method matches the pattern against the value. The context is needed
+    /// for resolving labels and things. The result is either an error, or a
+    /// match or not. If matches, the results are not added directly added to
+    /// the context, but returned to be added by the caller.
+    pub fn matches(&self, x: &Value, _context: &Context) -> Result<Option<HashMap<String, Value>>> {
+        match self {
+            Pattern::Label {
+                name,
+                parameter_patterns,
+            } => {
+                // Match
+                if let Value::Labeled { label, arguments } = x
+                    && label.name == *name
+                {
+                    if arguments.len() != parameter_patterns.len() {
+                        todo!()
+                    }
+
+                    Ok(parameter_patterns
+                        .iter()
+                        .zip(arguments)
+                        // Match all subpatterns
+                        .map(|(p, a)| p.matches(a, _context))
+                        // Check no errors
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
+                        // Check all match
+                        .collect::<Option<Vec<_>>>()
+                        .map(|o| o.into_iter().flatten().collect()))
+                } else {
+                    Ok(None)
+                }
+            }
+            Pattern::Var(name) => Ok(Some([(name.clone(), x.clone())].into())),
+            Pattern::Wildcard => Ok(Some([].into())),
         }
     }
 }

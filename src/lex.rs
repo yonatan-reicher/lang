@@ -44,6 +44,11 @@ pub enum Token {
     Star,
     Slash,
     Eq,
+    Match,
+    /// `|`
+    Pipe,
+    /// `_`
+    Underscore,
 }
 
 // Some helpers
@@ -126,6 +131,7 @@ fn identifier_or_keyword<'a>() -> Parser<'a, Token, NoIdentifier> {
             "module" => Token::Module,
             "print" => Token::Print,
             "label" => Token::Label,
+            "match" => Token::Match,
             _ => Token::Ident(ident),
         })
 }
@@ -167,6 +173,8 @@ pub fn token<'a>() -> Parser<'a, Token, EofFail> {
         .and_then(|()| Parser::eof().not::<EofFail>())
         .and_then(|()| {
             one_of![
+                // Symbols should be added here
+                symbol("_", Token::Underscore).map_fail(Error::from),
                 symbol(";", Token::Semicolon).map_fail(Error::from),
                 symbol(":", Token::Colon).map_fail(Error::from),
                 symbol("=>", Token::FatArrow).map_fail(Error::from),
@@ -180,6 +188,7 @@ pub fn token<'a>() -> Parser<'a, Token, EofFail> {
                 symbol(")", Token::RParen).map_fail(Error::from),
                 symbol("{", Token::LCurly).map_fail(Error::from),
                 symbol("}", Token::RCurly).map_fail(Error::from),
+                symbol("|", Token::Pipe).map_fail(Error::from),
                 identifier_or_keyword().map_fail(Error::from),
                 number().map_fail(Error::from),
             ]

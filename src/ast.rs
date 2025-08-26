@@ -50,6 +50,20 @@ pub enum Expr {
     /// The first element is the function being applied.
     #[from]
     App(Vec<Expr>),
+    Match(Box<Expr>, Vec<MatchArm>),
+}
+
+#[derive(Clone, Debug, derive_more::From, PartialEq)]
+pub struct MatchArm(pub Pattern, pub Expr);
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pattern {
+    Label {
+        name: String,
+        parameter_patterns: Vec<Pattern>,
+    },
+    Var(String),
+    Wildcard,
 }
 
 #[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]

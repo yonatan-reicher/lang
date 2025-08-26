@@ -1,7 +1,10 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
+use functionality::prelude::*;
+
 use crate::context::{Context, Module};
-use crate::value::{BuiltinDefinition, Label, LabelFunc, PLabel, Value};
+use crate::value::{BuiltinDefinition, Func, Label, LabelFunc, PLabel, Value};
 
 impl Module {
     pub fn insert(&mut self, builtin: BuiltinDefinition) {
@@ -31,16 +34,36 @@ fn stdlib() -> Module {
             Ok((-i).into())
         }),
     });
-    ret.insert(BuiltinDefinition {
+    let fix: Rc<RefCell<Option<BuiltinDefinition>>> = Default::default();
+    let fix0 = fix.clone();
+    let fix1 = BuiltinDefinition {
         name: "fix".into(),
         arity: 1,
-        func: Rc::new(|values| {
+        func: Rc::new(move |values| {
             let [Value::Func(f)] = values else {
                 panic!("fix should be called with a single function argument");
             };
-            f.apply(f.clone().into())
+            let fix0 = fix0.clone();
+            let f0 = f.clone();
+            f.apply(
+                BuiltinDefinition {
+                    name: "f".into(),
+                    arity: 1,
+                    func: Rc::new(move |args| {
+                        let arg = args.first().unwrap();
+                        fix0.borrow()
+                            .clone()
+                            .unwrap()
+                            .pipe(Func::from)
+                            .apply_all(&[f0.clone().into(), arg.clone()])
+                    }),
+                }
+                .into(),
+            )
         }),
-    });
+    };
+    *fix.borrow_mut() = Some(fix1);
+    ret.insert(fix.borrow().clone().unwrap());
 
     let none = PLabel::from(Label {
         name: "None".into(),
@@ -55,7 +78,13 @@ fn stdlib() -> Module {
         parameters: vec!["f".to_string()],
     });
     ret.values.extend([
-        ("None".into(), Value::Labeled { label: none, arguments: vec![] }),
+        (
+            "None".into(),
+            Value::Labeled {
+                label: none,
+                arguments: vec![],
+            },
+        ),
         ("Print".into(), LabelFunc::from(print).into()),
         ("Input".into(), LabelFunc::from(input).into()),
     ]);
