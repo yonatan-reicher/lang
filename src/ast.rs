@@ -34,6 +34,7 @@ pub enum Statement {
     },
 }
 
+// TODO: Use reference counting for better cloning?
 #[derive(Clone, Debug, derive_more::From, PartialEq)]
 pub enum Expr {
     #[from]
