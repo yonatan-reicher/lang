@@ -226,7 +226,7 @@ impl Stdlib {
             .rev()
             .fold(self.nil(), |acc, item| Value::Labeled {
                 label: self.list.cons.clone(),
-                arguments: vec![item.into(), acc],
+                arguments: vec![item, acc],
             })
     }
 }
