@@ -66,7 +66,6 @@ mod tests {
     use crate::ast::Expr;
     use crate::context::PrintOutput;
     use crate::value::Value;
-    use functionality::Mutate;
 
     #[test]
     fn statments() {
@@ -78,8 +77,8 @@ mod tests {
             vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
             out: PrintOutput::Vec(std::rc::Rc::clone(&out)),
             modules: [].into(),
-        }
-        .mutate(Context::add_stdlib);
+        };
+        context.add_stdlib();
 
         s1.execute(&mut context).unwrap(); // x = 100;
         s2.execute(&mut context).unwrap(); // print x;
