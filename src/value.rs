@@ -110,125 +110,25 @@ pub struct BuiltinDefinition {
     pub func: Rc<dyn Fn(&[Value]) -> crate::eval::Result<Value>>,
 }
 
-/*
-impl PartialEq for BuiltinDefinition {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.arity == other.arity && self.func == other.func
+
+// Some helpers
+
+
+impl Value {
+    pub const fn is_unit(&self) -> bool {
+        matches!(self, Value::Unit)
     }
-}
-*/
 
-/*
-macro_rules! impl_from {
-    (
-        // The type to convert from.
-        $from: ident
-        for
-        // convert to.
-        $to: ident
-        ::
-        // Name of a constructor.
-        $constructor: ident
-    ) => {
-        impl From<$from> for $to {
-            fn from(x: $from) -> Self {
-                Self::$constructor(x.into())
-            }
-        }
-    };
-    (
-        // The type to convert from.
-        $from: ident
-        for
-        // convert to.
-        $to: ident
-        using
-        $middle: ty
-    ) => {
-        impl From<$from> for $to {
-            fn from(x: $from) -> Self {
-                let y: $middle = x.into();
-                y.into()
-            }
-        }
-    };
-}
-
-// Implement From conversions
-impl_from!(bool for Value::Bool);
-impl_from!(i64 for Value::Int);
-impl_from!(String for Value::Str);
-impl_from!(Func for Value::Func);
-impl_from!(LambdaFunc for Func::Lambda);
-impl_from!(LambdaFunc for Value::Func);
-impl_from!(BuiltinFunc for Func::Builtin);
-impl_from!(BuiltinFunc for Value::Func);
-impl From<Rc<BuiltinDefinition>> for BuiltinFunc {
-    fn from(value: Rc<BuiltinDefinition>) -> Self {
-        BuiltinFunc {
-            applied_already: vec![],
-            definition: value,
+    /// Takes a labeled value, or a label function or closure, and returns it's
+    /// label and the arguments that have been applied to it.
+    pub const fn unlabel(&self) -> Option<(&PLabel, &Vec<Value>)> {
+        match self {
+            Value::Labeled { label, arguments } => Some((label, arguments)),
+            Value::Func(Func::Label(LabelFunc {
+                label,
+                applied_already,
+            })) => Some((label, applied_already)),
+            _ => None,
         }
     }
 }
-impl_from!(BuiltinDefinition for BuiltinFunc using Rc<BuiltinDefinition>);
-impl_from!(BuiltinDefinition for Func::Builtin);
-impl_from!(BuiltinDefinition for Value::Func);
-impl_from!(ConstructorFunc for Func::Constructor);
-impl_from!(ConstructorFunc for Value::Func);
-
-#[derive(Debug, thiserror::Error)]
-pub enum PConstructorError {
-    #[error(
-        "Constructor should take index of an existing constructor, but got '{index}' in type '{type}', which has only {c} constructors",
-        c = r#type.constructors.len(),
-    )]
-    IndexIsNotValid { index: usize, r#type: Rc<Type> },
-}
-
-impl PConstructor {
-    pub fn new(r#type: Rc<Type>, index: usize) -> Result<Self, PConstructorError> {
-        let Some(constructor) = r#type.constructors.get(index) else {
-            return Err(PConstructorError::IndexIsNotValid { index, r#type });
-        };
-        let ptr = constructor as _;
-        Ok(Self { r#type, ptr })
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ConstructorFuncError {
-    #[error(
-        "constructor given to constructor function object should have parameters, but had none (constructor {constructor})"
-    )]
-    ConstructorIsParameterless { constructor: PConstructor },
-    #[error("{0}")]
-    PConstructorError(#[from] PConstructorError),
-}
-
-impl ConstructorFunc {
-    pub fn new(r#type: Rc<Type>, constructor_index: usize) -> Result<Self, ConstructorFuncError> {
-        let this = Self {
-            constructor: PConstructor::new(r#type, constructor_index),
-            applied_already: vec![],
-        };
-        assert!(
-            !this.constructor.parameters.is_empty(),
-            "constructor functions should be only hold constructors that have parameters",
-        );
-        this
-    }
-}
-
-impl std::ops::Deref for PConstructor {
-    type Target = Constructor;
-
-    fn deref(&self) -> &Self::Target {
-        // Safety:
-        // This dereference is fine as long as this object was constructed with
-        // the appropriate `new` function
-        unsafe { &*self.ptr }
-    }
-}
-
-*/

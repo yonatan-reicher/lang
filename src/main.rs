@@ -79,13 +79,13 @@ fn run_text(text: &str) -> Result<()> {
     });
     dbg!(&program);
     let mut context = Context::default();
-    context.add_stdlib();
+    let stdlib = context.add_stdlib();
     let Some(ret) = program.execute(&mut context)? else {
         eprintln!("This program does not return a value");
         exit(0);
     };
 
-    lang::io_commands::execute(&ret, &context, &mut stdin().lock())?;
+    stdlib.execute(&ret, &mut stdin().lock())?;
 
     Ok(())
 }
