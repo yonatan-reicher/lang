@@ -19,7 +19,7 @@ pub enum Value {
     #[from]
     Int(i64),
     /// "Hello handsome"
-    #[from]
+    #[from(String, &str)]
     Str(String),
     /// print, (x => x + 1)
     #[from(Func, LambdaFunc, BuiltinFunc, LabelFunc, BuiltinDefinition)]
