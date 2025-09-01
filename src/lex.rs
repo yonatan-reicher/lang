@@ -97,8 +97,8 @@ derive_all![
     pub struct NoQuote;
 ];
 derive_all![
-    #[error("does begin with '\"'")]
-    pub struct YesQuote;
+    #[error("does begin not begin with a non-quote character")]
+    pub struct YesQuoteOrEof;
 ];
 
 derive_all![ - Default
@@ -109,8 +109,8 @@ derive_all![ - Default
 ];
 
 fn string<'a>() -> Parser<'a, Token, NoQuote, StringError> {
-    fn not_quote<'a, E: 'a>() -> Parser<'a, char, YesQuote, E> {
-        Parser::char().or_fail(YesQuote).filter(|c| *c != '\'')
+    fn not_quote<'a, E: 'a>() -> Parser<'a, char, YesQuoteOrEof, E> {
+        Parser::char().or_fail(YesQuoteOrEof).filter(|c| *c != '"')
     }
 
     // Expect opening quote
@@ -321,9 +321,9 @@ mod tests {
             ParseResult::Ok(
                 Token::String("hello world1'!".into()),
                 Pos {
-                    offset: 1,
+                    offset: 16,
                     row: 1,
-                    col: 2,
+                    col: 17,
                 },
             ),
         );
