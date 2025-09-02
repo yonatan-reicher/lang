@@ -3,6 +3,7 @@
 /// Defines the Abstract Syntax Tree.
 pub mod ast;
 pub mod value;
+pub mod value_ref;
 pub mod lex;
 pub mod parse;
 /// Defines the context of the interpreter while it is running.

@@ -19,14 +19,23 @@ pub enum Value {
     #[from]
     Int(i64),
     /// "Hello handsome"
-    #[from(String, &str)]
-    Str(String),
+    #[from(Rc<str>, &str, String)]
+    Str(Rc<str>),
     /// print, (x => x + 1)
-    #[from(Func, LambdaFunc, BuiltinFunc, LabelFunc, BuiltinDefinition)]
-    Func(Func),
+    #[from(Rc<Func> /* `Func` handled by a different impl */)]
+    Func(Rc<Func>),
     /// Hello x y     (here `Hello` is the label)
-    #[display("{}", display_applied(label, arguments))]
-    Labeled { label: PLabel, arguments: Vec<Value> }
+    #[from(Rc<Labeled>, Labeled)]
+    Labeled(Rc<Labeled>),
+}
+
+#[derive(Debug, Display, PartialEq)]
+#[display("{}", display_applied(label, args))]
+pub struct Labeled {
+    pub label: PLabel,
+    // I wanted this to be `args: [Value]`, but currently it's too hard to
+    // construct unsized structs (yes, even in an `Rc`).
+    pub args: Vec<Value>,
 }
 
 #[derive(Clone, Debug, Display, From, PartialEq)]
@@ -39,12 +48,19 @@ pub enum Func {
     Label(LabelFunc),
 }
 
+impl<T> From<T> for Value
+where T: Into<Func> {
+    fn from(value: T) -> Self {
+        Value::Func(Rc::new(value.into()))
+    }
+}
+
 #[derive(Clone, Debug, Display, PartialEq)]
 #[display("({param_name} => ...)")]
 pub struct LambdaFunc {
     pub param_name: String,
-    pub closure: Rc<crate::context::Context>,
-    pub body: Rc<crate::ast::Expr>,
+    pub closure: crate::context::Context,
+    pub body: crate::ast::Expr,
 }
 
 #[derive(Clone, Debug, Display)]
@@ -121,10 +137,11 @@ impl Value {
 
     /// Takes a labeled value, or a label function or closure, and returns it's
     /// label and the arguments that have been applied to it.
-    pub const fn unlabel(&self) -> Option<(&PLabel, &Vec<Value>)> {
-        match self {
-            Value::Labeled { label, arguments } => Some((label, arguments)),
-            Value::Func(Func::Label(LabelFunc {
+    pub fn unlabel(&self) -> Option<(&PLabel, &[Value])> {
+        use crate::value_ref::ValueRef;
+        match self.as_ref() {
+            ValueRef::Labeled(Labeled { label, args }) => Some((label, args)),
+            ValueRef::Func(Func::Label(LabelFunc {
                 label,
                 applied_already,
             })) => Some((label, applied_already)),

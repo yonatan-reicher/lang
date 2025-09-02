@@ -4,7 +4,7 @@ use std::rc::Rc;
 use functionality::prelude::*;
 
 use crate::context::{Context, Module};
-use crate::value::{BuiltinDefinition, BuiltinFunc, Func, Label, LabelFunc, PLabel, Value};
+use crate::value::{BuiltinDefinition, Func, Label, LabelFunc, Labeled, PLabel, Value};
 
 pub struct Stdlib {
     pub io_commands: IoCommands,
@@ -30,9 +30,9 @@ pub struct List {
 
 #[derive(Clone, Debug)]
 pub struct Other {
-    pub abs: BuiltinFunc,
-    pub neg: BuiltinFunc,
-    pub fix: BuiltinFunc,
+    pub abs: Rc<Func>,
+    pub neg: Rc<Func>,
+    pub fix: Rc<Func>,
 }
 
 impl Module {
@@ -65,7 +65,7 @@ impl Stdlib {
 
 impl Stdlib {
     pub fn new() -> Stdlib {
-        let abs = BuiltinFunc::from(BuiltinDefinition {
+        let abs = BuiltinDefinition {
             name: "abs".into(),
             arity: 1,
             func: Rc::new(|values| {
@@ -74,8 +74,8 @@ impl Stdlib {
                 };
                 Ok(i.abs().into())
             }),
-        });
-        let neg = BuiltinFunc::from(BuiltinDefinition {
+        }.pipe(Func::from).pipe(Rc::new);
+        let neg = BuiltinDefinition {
             name: "neg".into(),
             arity: 1,
             func: Rc::new(|values| {
@@ -84,10 +84,10 @@ impl Stdlib {
                 };
                 Ok((-i).into())
             }),
-        });
-        let fix_cell: Rc<RefCell<Option<BuiltinFunc>>> = Default::default();
+        }.pipe(Func::from).pipe(Rc::new);
+        let fix_cell: Rc<RefCell<Option<Rc<Func>>>> = Default::default();
         let fix_cell_clone = fix_cell.clone();
-        let fix = BuiltinFunc::from(BuiltinDefinition {
+        let fix = BuiltinDefinition {
             name: "fix".into(),
             arity: 1,
             func: Rc::new(move |values| {
@@ -105,14 +105,13 @@ impl Stdlib {
                             fix0.borrow()
                                 .clone()
                                 .unwrap()
-                                .pipe(Func::from)
                                 .apply_all(&[f0.clone().into(), arg.clone()])
                         }),
                     }
                     .into(),
                 )
             }),
-        });
+        }.pipe(Func::from).pipe(Rc::new);
         *fix_cell.borrow_mut() = Some(fix.clone());
         let other = Other { abs, neg, fix };
 
@@ -183,10 +182,10 @@ impl Stdlib {
                 ("Ls".into(), LabelFunc::from(ls.clone()).into()),
                 (
                     "None".into(),
-                    Value::Labeled {
+                    Labeled {
                         label: none.clone(),
-                        arguments: vec![],
-                    },
+                        args: vec![],
+                    }.into(),
                 ),
                 ("Print".into(), LabelFunc::from(print.clone()).into()),
                 ("Read".into(), LabelFunc::from(read.clone()).into()),
@@ -197,10 +196,10 @@ impl Stdlib {
                 ("Cons".into(), LabelFunc::from(cons.clone()).into()),
                 (
                     "Nil".into(),
-                    Value::Labeled {
+                    Labeled {
                         label: nil.clone(),
-                        arguments: vec![],
-                    },
+                        args: vec![],
+                    }.into(),
                 ),
                 ("abs".into(), abs.clone().into()),
                 ("neg".into(), neg.clone().into()),
@@ -211,10 +210,10 @@ impl Stdlib {
     }
 
     pub fn nil(&self) -> Value {
-        Value::Labeled {
+        Labeled {
             label: self.list.nil.clone(),
-            arguments: vec![],
-        }
+            args: vec![],
+        }.into()
     }
 
     pub fn to_list<I>(&self, x: I) -> Value
@@ -224,10 +223,10 @@ impl Stdlib {
     {
         x.into_iter()
             .rev()
-            .fold(self.nil(), |acc, item| Value::Labeled {
+            .fold(self.nil(), |acc, item| Labeled {
                 label: self.list.cons.clone(),
-                arguments: vec![item, acc],
-            })
+                args: vec![item, acc],
+            }.into())
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{execute_string, value::Value};
+use crate::{execute_string, value::Labeled, value_ref::ValueRef};
 use indoc::indoc;
 
 #[test]
@@ -51,16 +51,16 @@ fn test_label() {
     .unwrap();
 
     dbg!(&stdout);
-    let Value::Labeled { label, arguments } = &stdout[0] else {
+    let ValueRef::Labeled(Labeled { label, args }) = stdout[0].as_ref() else {
         panic!()
     };
     assert_eq!(label.name, "Cons");
-    assert_eq!(arguments[0], 2.into());
-    let Value::Labeled { label, arguments } = &arguments[1] else {
+    assert_eq!(args[0], 2.into());
+    let ValueRef::Labeled(Labeled { label, args }) = args[1].as_ref() else {
         panic!()
     };
     assert_eq!(label.name, "Nil");
-    assert_eq!(arguments, &vec![]);
+    assert_eq!(args, &vec![]);
 }
 
 #[test]
@@ -70,17 +70,17 @@ fn test_print() {
         print (Print 2 None);
     "}).unwrap();
     dbg!(&stdout);
-    let Value::Labeled { label, arguments } = &stdout[0] else {
+    let ValueRef::Labeled(Labeled { label, args }) = stdout[0].as_ref() else {
         panic!()
     };
     assert_eq!(label.name, "Print");
-    assert_eq!(arguments[0], 2.into());
-    let Value::Labeled { label, arguments } = &arguments[1] else {
-        dbg!(&arguments[1]);
+    assert_eq!(args[0], 2.into());
+    let ValueRef::Labeled(Labeled { label, args }) = args[1].as_ref() else {
+        dbg!(&args[1]);
         panic!()
     };
     assert_eq!(label.name, "None");
-    assert_eq!(arguments, &vec![]);
+    assert_eq!(args, &vec![]);
 }
 
 #[test]

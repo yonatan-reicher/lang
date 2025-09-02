@@ -4,7 +4,8 @@ use std::rc::Rc;
 // our imports
 use crate::ast::{BinOp, Expr, MatchArm, Pattern};
 use crate::context::Context;
-use crate::value::{BuiltinFunc, Func, LabelFunc, LambdaFunc, PLabel, Value};
+use crate::value::{BuiltinFunc, Func, LabelFunc, Labeled, LambdaFunc, PLabel, Value};
+use crate::value_ref::ValueRef;
 // other imports
 use functionality::{Mutate, Pipe};
 use thiserror::Error;
@@ -17,7 +18,7 @@ use thiserror::Error;
     the_arg = &args[*on_arg],
 )]
 pub struct ApplyAllError {
-    func: Func,
+    func: Rc<Func>,
     args: Vec<Value>,
     returns: Value,
     on_arg: usize,
@@ -25,7 +26,7 @@ pub struct ApplyAllError {
 
 impl LambdaFunc {
     pub fn apply(&self, arg: Value) -> Result<Value> {
-        let mut context = self.closure.as_ref().clone();
+        let mut context = self.closure.clone();
         context.vars.insert(self.param_name.clone(), arg);
         self.body.eval(&context)
     }
@@ -81,12 +82,13 @@ impl LotsOfParametersFunc for BuiltinFunc {
 }
 
 impl LotsOfParametersFunc for LabelFunc {
-    fn apply_finalize(&self, arguments: Vec<Value>) -> Result<Value> {
-        assert_eq!(self.arity() as usize, arguments.len());
-        Value::Labeled {
+    fn apply_finalize(&self, args: Vec<Value>) -> Result<Value> {
+        assert_eq!(self.arity() as usize, args.len());
+        Labeled {
             label: self.label.clone(),
-            arguments,
+            args,
         }
+        .pipe(Value::from)
         .pipe(Ok)
     }
 
@@ -116,7 +118,7 @@ impl Func {
     }
 
     #[allow(clippy::result_large_err)]
-    pub fn apply_all(&self, args: &[Value]) -> Result<Value> {
+    pub fn apply_all(self: &Rc<Func>, args: &[Value]) -> Result<Value> {
         // We are going to continue applying arguments on this variable.
         let mut ret: Value = self.clone().into();
         // We want the index for the error message.
@@ -181,7 +183,7 @@ impl Expr {
     pub fn eval(&self, context: &Context) -> Result<Value> {
         match self {
             Expr::Int(i) => Ok(Value::Int(*i)),
-            Expr::Str(s) => Ok(Value::Str(s.clone())),
+            Expr::Str(s) => Ok(s.as_str().into()),
             Expr::Var(name) => context
                 .vars
                 .get(name)
@@ -194,8 +196,8 @@ impl Expr {
             }
             Expr::Func(name, body) => Ok(LambdaFunc {
                 param_name: name.clone(),
-                closure: context.clone().into(),
-                body: body.clone().into(),
+                closure: context.clone(),
+                body: body.as_ref().clone(),
             }
             .into()),
             Expr::App(exprs) => {
@@ -244,7 +246,7 @@ impl Expr {
             // Numeric operators
             Add => match (lhs, rhs()?) {
                 (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
-                (Value::Str(l), Value::Str(r)) => Ok(Value::Str(l + &r)),
+                (Value::Str(l), Value::Str(r)) => Ok(Value::from(l.to_string() + &r)),
                 (_, r) => err("Ints and Strings", r),
             },
             Sub => match (lhs, rhs()?) {
@@ -289,16 +291,16 @@ impl Pattern {
                 parameter_patterns,
             } => {
                 // Match
-                if let Value::Labeled { label, arguments } = x
+                if let ValueRef::Labeled(Labeled { label, args }) = x.as_ref()
                     && label.name == *name
                 {
-                    if arguments.len() != parameter_patterns.len() {
+                    if args.len() != parameter_patterns.len() {
                         todo!()
                     }
 
                     Ok(parameter_patterns
                         .iter()
-                        .zip(arguments)
+                        .zip(args)
                         // Match all subpatterns
                         .map(|(p, a)| p.matches(a, _context))
                         // Check no errors

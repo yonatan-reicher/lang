@@ -13,15 +13,15 @@ use derive_more::{Display, From};
 #[derive(Clone, Debug, Display)]
 pub enum IoCommand {
     #[display("(Input {_0})")]
-    Input(Func),
+    Input(Rc<Func>),
     #[display("(Ls {0} {_1})", _0.display())]
-    Ls(Rc<Path>, Func),
+    Ls(Rc<Path>, Rc<Func>),
     #[display("None")]
     None,
     #[display("(Ls {value} {next})")]
     Print { value: Value, next: Rc<IoCommand> },
     #[display("(Read {0} {_1})", _0.display())]
-    Read(Rc<Path>, Func),
+    Read(Rc<Path>, Rc<Func>),
     #[display("(Write {} {text} {next})", path.display())]
     Write {
         path: Rc<Path>,
@@ -66,7 +66,7 @@ pub enum Error {
 
 macro_rules! args {
     ($value:expr, [ $($arg:pat),* ] = $args:expr) => {
-        let [$($arg),*] = $args.as_slice() else {
+        let [$($arg),*] = $args else {
             return Err(IoCommandError::General {
                 bad_value: $value.clone(),
             });
@@ -112,7 +112,7 @@ impl IoCommand {
         } else if label == ls {
             args!(x, [Value::Str(path), f] = args);
             func!(x, "f", Func f = f);
-            let path = Path::new(path);
+            let path = Path::new(path.as_ref());
             Ok(IoCommand::Ls(path.into(), f.clone()))
         } else if label == none {
             args!(x, [] = args);
@@ -127,14 +127,14 @@ impl IoCommand {
         } else if label == read {
             args!(x, [Value::Str(path), f] = args);
             func!(x, "f", Func f = f);
-            let path = Path::new(path);
+            let path = Path::new(path.as_ref());
             Ok(IoCommand::Read(path.into(), f.clone()))
         } else if label == write {
             args!(x, [Value::Str(path), Value::Str(text), next] = args);
-            let path = Path::new(path);
+            let path = Path::new(path.as_ref());
             Ok(IoCommand::Write {
                 path: path.into(),
-                text: text.clone().into(),
+                text: text.clone(),
                 next: Rc::new(IoCommand::of_value(next, stdlib)?),
             })
         } else {
