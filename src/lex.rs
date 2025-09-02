@@ -1,5 +1,7 @@
 //! This module is responsible for parsing from source code to tokens.
 
+use std::rc::Rc;
+
 // use libraries
 use derive_more::From;
 use nessie_parse::one_of;
@@ -14,12 +16,15 @@ use thiserror::Error;
 // does not apply.
 
 /// The parser type we use.
-type Parser<'a, T, F> = nessie_parse::Parser<'a, T, Error, F>;
+type Parser<'a, T, F, E = Error> = nessie_parse::Parser<'a, T, E, F>;
 
 #[derive(Clone, Debug, From, PartialEq, Eq)]
 pub enum Token {
-    Ident(String),
+    Ident(Rc<String>),
+    #[from]
     Number(i64),
+    #[from]
+    String(Rc<str>),
     Colon,
     Comma,
     Exporting,
@@ -88,6 +93,40 @@ fn number<'a>() -> Parser<'a, Token, NoDigit> {
 }
 
 derive_all![
+    #[error("does not begin with '\"'")]
+    pub struct NoQuote;
+];
+derive_all![
+    #[error("does begin not begin with a non-quote character")]
+    pub struct YesQuoteOrEof;
+];
+
+derive_all![ - Default
+    pub enum StringError {
+        #[error("string is missing a closing quote")]
+        NoClosingQuote,
+    }
+];
+
+fn string<'a>() -> Parser<'a, Token, NoQuote, StringError> {
+    fn not_quote<'a, E: 'a>() -> Parser<'a, char, YesQuoteOrEof, E> {
+        Parser::char().or_fail(YesQuoteOrEof).filter(|c| *c != '"')
+    }
+
+    // Expect opening quote
+    Parser::char_eq('"').and_then(|_| {
+        // Some middle chars...
+        not_quote().repeat_0().and_then(|chars| {
+            let token = Token::String(vec_to_string(chars).into());
+            // Closing quote!
+            Parser::<_, (), _>::char_eq('"')
+                .map(move |_| token.clone())
+                .or_err(StringError::NoClosingQuote)
+        })
+    })
+}
+
+derive_all![
     #[error("does not begin with a letter or an underscore")]
     struct NoLetterOrUnderscore;
 ];
@@ -132,7 +171,7 @@ fn identifier_or_keyword<'a>() -> Parser<'a, Token, NoIdentifier> {
             "print" => Token::Print,
             "label" => Token::Label,
             "match" => Token::Match,
-            _ => Token::Ident(ident),
+            _ => Token::Ident(ident.into()),
         })
 }
 
@@ -158,6 +197,10 @@ pub enum Error {
     NoSymbol(NoSymbol),
     #[error("{0}")]
     NoNumber(NoDigit),
+    #[error("{0}")]
+    NoQuote(NoQuote),
+    #[error("{0}")]
+    String(StringError),
     #[error("{}", .0.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(", "))]
     Many(Vec<Error>),
 }
@@ -191,6 +234,7 @@ pub fn token<'a>() -> Parser<'a, Token, EofFail> {
                 symbol("|", Token::Pipe).map_fail(Error::from),
                 identifier_or_keyword().map_fail(Error::from),
                 number().map_fail(Error::from),
+                string().map_fail(Error::from).map_err(Error::from),
             ]
             .and_then_fail(|errors| Parser::err(Error::Many(errors)))
         })
@@ -206,7 +250,7 @@ where
         .map(|_| ())
 }
 
-pub fn token_ident<'a, F>() -> Parser<'a, String, F>
+pub fn token_ident<'a, F>() -> Parser<'a, Rc<String>, F>
 where
     F: 'a + Clone + Default,
 {
@@ -259,6 +303,27 @@ mod tests {
                     offset: 1,
                     row: 1,
                     col: 2,
+                },
+            ),
+        );
+    }
+
+    #[test]
+    fn token_string_literal() {
+        let res = token().parse(
+            indoc! {r#"
+                "hello world1'!"
+            "#}
+            .into(),
+        );
+        assert_eq!(
+            res,
+            ParseResult::Ok(
+                Token::String("hello world1'!".into()),
+                Pos {
+                    offset: 16,
+                    row: 1,
+                    col: 17,
                 },
             ),
         );

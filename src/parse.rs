@@ -1,5 +1,7 @@
 //! This module is responsible for parsing from source code to AST.
 
+use std::rc::Rc;
+
 // use from this crate
 use crate::ast::{BinOp, Expr, MatchArm, ModuleDecl, Pattern, Program, Statement};
 use crate::lex::{EofFail, Error as LexError, Token, token, token_eq, token_ident};
@@ -120,7 +122,7 @@ fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
                         .or_err(Error::MissingRParen)
                 }),
             Token::Number(n) => Parser::ret(Expr::Int(n)),
-            Token::Ident(ident) => Parser::ret(Expr::Var(ident)),
+            Token::Ident(ident) => Parser::ret(Expr::Var(ident.as_ref().clone())),
             _ => Parser::fail(NoAtom::default()),
         })
 }
@@ -139,7 +141,7 @@ fn function_expr<'a>() -> Parser<'a, Expr, NoFunction> {
                 expr().or_err(Error::NoFunctionBody).map(move |body| {
                     let name = param_name.clone();
                     let body = body.clone();
-                    Expr::Func(name, body.into())
+                    Expr::Func(name.as_ref().into(), body.into())
                 })
             })
     })
@@ -156,16 +158,18 @@ fn application_expr_or_atom<'a>() -> Parser<'a, Expr, NoAtom> {
     })
 }
 
-static BINARY_OP_MAP: &[(Token, BinOp)] = &[
-    (Token::Plus, BinOp::Add),
-    (Token::Minus, BinOp::Sub),
-    (Token::Star, BinOp::Mul),
-    (Token::Slash, BinOp::Div),
-    (Token::Eq, BinOp::Eq),
-];
+fn binary_op_map() -> &'static [(Token, BinOp)] {
+    &[
+        (Token::Plus, BinOp::Add),
+        (Token::Minus, BinOp::Sub),
+        (Token::Star, BinOp::Mul),
+        (Token::Slash, BinOp::Div),
+        (Token::Eq, BinOp::Eq),
+    ]
+}
 
 fn binops() -> String {
-    BINARY_OP_MAP
+    binary_op_map()
         .iter()
         .map(|(_, r)| r.to_string())
         .collect::<Vec<_>>()
@@ -185,7 +189,7 @@ fn binop<'a>() -> Parser<'a, BinOp, NotABinOp> {
         .map_fail(From::from)
         .map_err(Error::from)
         .and_then(|token| {
-            for (t, op) in BINARY_OP_MAP {
+            for (t, op) in binary_op_map() {
                 if t == &token {
                     return Parser::ret(*op);
                 }
@@ -300,6 +304,7 @@ fn pattern_atom<'a>() -> Parser<'a, Pattern, EofFail> {
             .map(|()| Pattern::Wildcard),
         token_ident().map_err(From::from).map(|name| {
             let is_label = name.chars().next().is_some_and(char::is_uppercase);
+            let name = name.as_ref().clone();
             if is_label {
                 Pattern::Label {
                     name,
@@ -327,7 +332,7 @@ fn pattern<'a>() -> Parser<'a, Pattern, EofFail> {
             pattern_atom()
                 .repeat_1()
                 .map(move |parameter_patterns| Pattern::Label {
-                    name: name.clone(),
+                    name: name.as_ref().clone(),
                     parameter_patterns,
                 })
         }),
@@ -350,7 +355,7 @@ fn assignment_statement<'a>() -> Parser<'a, Statement> {
             let ident = ident.clone();
             expr()
                 .or_err(Error::AssignmentStatementExpectsExpression)
-                .map(move |ex| Statement::Assignment(ident.clone(), ex))
+                .map(move |ex| Statement::Assignment(ident.as_ref().clone(), ex))
         })
     })
 }
@@ -360,7 +365,7 @@ fn assignment_statement<'a>() -> Parser<'a, Statement> {
 fn parenthesis_name_list<'a>(
     on_missing_left_paren: fn() -> Error,
     on_missing_right_paren: fn() -> Error,
-) -> Parser<'a, Vec<String>> {
+) -> Parser<'a, Vec<Rc<String>>> {
     // (
     token_eq::<()>(Token::LParen)
         .map_err(Error::from)
@@ -380,7 +385,7 @@ fn parenthesis_name_list<'a>(
         })
 }
 
-fn import_exposing<'a>() -> Parser<'a, Vec<String>> {
+fn import_exposing<'a>() -> Parser<'a, Vec<Rc<String>>> {
     token_eq(Token::Exposing)
         .map_err(Error::from)
         .and_then(|()| {
@@ -400,8 +405,8 @@ fn import_statement<'a>() -> Parser<'a, Statement> {
                 import_exposing().maybe().map(move |exposing| {
                     let exposing = exposing.unwrap_or_default();
                     Statement::Import {
-                        module_name: module_name.clone(),
-                        imports: exposing,
+                        module_name: module_name.as_ref().clone(),
+                        imports: exposing.into_iter().map(|x| x.to_string()).collect(),
                     }
                 })
             })
@@ -420,8 +425,12 @@ fn label_statement<'a>() -> Parser<'a, Statement> {
                 .map_err(Error::from)
                 .repeat_0()
                 .map(move |parameters| Statement::Label {
-                    name: name.clone(),
-                    parameters: parameters.clone(),
+                    name: name.as_ref().clone(),
+                    parameters: parameters
+                        .into_iter()
+                        .map(|x| x.as_ref().clone())
+                        .clone()
+                        .collect(),
                 })
         })
     })
@@ -480,7 +489,7 @@ fn block<'a, F: 'a>() -> Parser<'a, Block, F> {
     .or_ret(Block::default())
 }
 
-fn module_exporting<'a>() -> Parser<'a, Vec<String>> {
+fn module_exporting<'a>() -> Parser<'a, Vec<Rc<String>>> {
     token_eq(Token::Exporting)
         .map_err(Error::from)
         .and_then(|()| {
@@ -498,8 +507,12 @@ fn module_declaration<'a>() -> Parser<'a, ModuleDecl> {
             .or_err(Error::ExpectedModuleName)
             .and_then(|name| {
                 module_exporting().maybe().map(move |exports| ModuleDecl {
-                    name: name.clone(),
-                    exports: exports.unwrap_or_default(),
+                    name: name.as_ref().clone(),
+                    exports: exports
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|x| x.as_ref().clone())
+                        .collect(),
                 })
             })
     })
