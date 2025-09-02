@@ -11,6 +11,7 @@ fn display_applied(name: impl std::fmt::Display, args: &[impl std::fmt::Display]
 pub enum Value {
     /// ()
     #[from]
+    #[display("()")]
     Unit,
     /// true, false
     #[from]
@@ -20,6 +21,7 @@ pub enum Value {
     Int(i64),
     /// "Hello handsome"
     #[from(Rc<str>, &str, String)]
+    #[display("\"{_0}\"")]
     Str(Rc<str>),
     /// print, (x => x + 1)
     #[from(Rc<Func> /* `Func` handled by a different impl */)]

@@ -1,0 +1,5 @@
+import stdlib exposing (Print None);
+
+f = (x => x + 1);
+
+Print 1 (Print (f 5) None)
