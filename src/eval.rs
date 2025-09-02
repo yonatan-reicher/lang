@@ -183,7 +183,7 @@ impl Expr {
     pub fn eval(&self, context: &Context) -> Result<Value> {
         match self {
             Expr::Int(i) => Ok(Value::Int(*i)),
-            Expr::Str(s) => Ok(s.as_str().into()),
+            Expr::Str(s) => Ok(s.clone().into()),
             Expr::Var(name) => context
                 .vars
                 .get(name)

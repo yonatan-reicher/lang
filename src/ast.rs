@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use derive_more::Display;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,8 +41,8 @@ pub enum Statement {
 pub enum Expr {
     #[from]
     Int(i64),
-    #[from]
-    Str(String),
+    #[from(Rc<str>, String, &str)]
+    Str(Rc<str>),
     Var(String),
     #[from]
     BinOp(Box<Expr>, BinOp, Box<Expr>),

@@ -123,6 +123,7 @@ fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
                 }),
             Token::Number(n) => Parser::ret(Expr::Int(n)),
             Token::Ident(ident) => Parser::ret(Expr::Var(ident.as_ref().clone())),
+            Token::String(s) => Parser::ret(Expr::Str(s.clone())),
             _ => Parser::fail(NoAtom::default()),
         })
 }
