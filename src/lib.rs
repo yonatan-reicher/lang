@@ -18,6 +18,8 @@ pub mod repl;
 /// Executing Io operations represented as values.
 pub mod io_commands;
 
+/// This function returns a vector of values that were printed during execution.
+/// The RETURN VALUE of the program is IGNORED.
 pub fn execute_string(source_code: &str) -> Result<Vec<value::Value>, Box<dyn std::error::Error>> {
     let out = Default::default();
     let mut context = context::Context {

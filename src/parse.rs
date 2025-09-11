@@ -1,5 +1,7 @@
 //! This module is responsible for parsing from source code to AST.
 
+// TODO: Report token positions and error positions
+
 use std::rc::Rc;
 
 // use from this crate
