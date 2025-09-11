@@ -77,6 +77,10 @@ fn default<T: Default>() -> T {
     T::default()
 }
 
+fn position<'a, F: 'a, E: 'a>() -> Parser<'a, usize, F, E> {
+    Parser::state().map(|state| state.pos.offset)
+}
+
 // The implementation
 
 derive_all![
