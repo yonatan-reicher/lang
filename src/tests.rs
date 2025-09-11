@@ -113,3 +113,48 @@ fn test_failed_match() {
     dbg!(&res);
     assert!(res.is_err());
 }
+
+#[test]
+fn complex_syntax() {
+    let res = execute_string(indoc! {r#"
+        import stdlib exposing (
+            Cons
+            IsDir
+            Nil
+            None
+            Print
+            Read
+            fix
+        );
+
+        print_file = fix (print_file => p =>
+            print_files = fix (print_files => l =>
+                match l
+                | Nil => None
+                | Cons h t => Print h (print_files t)
+            );
+
+            IsDir p (is_dir =>
+                if is_dir
+                then Read p print_files
+                else Print p None
+            )
+        );
+
+        print (print_file ".")
+    "#});
+    dbg!(&res);
+
+    let value = res
+        .expect("Should execute successfully")
+        .first()
+        .cloned()
+        .expect("Should produce a single value");
+
+    let ValueRef::Labeled(Labeled { label, args }) = value.as_ref() else {
+        panic!()
+    };
+
+    assert_eq!(label.name, "IsDir");
+    assert_eq!(args.len(), 2);
+}
