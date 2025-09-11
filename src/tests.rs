@@ -68,7 +68,8 @@ fn test_print() {
     let stdout = execute_string(indoc! {r"
         import stdlib exposing (Print None);
         print (Print 2 None);
-    "}).unwrap();
+    "})
+    .unwrap();
     dbg!(&stdout);
     let ValueRef::Labeled(Labeled { label, args }) = stdout[0].as_ref() else {
         panic!()
@@ -93,7 +94,8 @@ fn test_match() {
             | A => 42
             | B => 69
         );
-    "#}).unwrap();
+    "#})
+    .unwrap();
     dbg!(&stdout);
     assert_eq!(stdout, vec![69.into()]);
 }
