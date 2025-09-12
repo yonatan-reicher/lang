@@ -24,9 +24,9 @@ use thiserror::Error;
 
 /// A monolith error type for this parser.
 #[derive(Clone, Debug, Error, PartialEq)]
-pub enum Error {
+pub enum Error<'text> {
     #[error("Unrecognized token: {0}")]
-    UnregocnizedToken(LexError),
+    UnregocnizedToken(LexError<'text>),
     // atom: ( expr )
     #[error("Expected an expression after '('. No expression because: {0}")]
     NoExprAfterLParen(ExprFailure),
@@ -69,14 +69,14 @@ pub enum Error {
     MatchArmExpectedExprAfterArrow(ExprFailure),
 }
 
-impl From<LexError> for Error {
-    fn from(e: LexError) -> Self {
+impl<'text> From<LexError<'text>> for Error<'text> {
+    fn from(e: LexError<'text>) -> Self {
         Error::UnregocnizedToken(e)
     }
 }
 
 /// The parser type we use.
-type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
+type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error<'a>, F>;
 
 macro_rules! derive_all {
     ( - Default /* Should be an item */ $($token:tt)* ) => {
@@ -318,7 +318,7 @@ fn pattern_atom<'a>() -> Parser<'a, Pattern, EofFail> {
             }
         }),
         token_eq(Token::LParen).map_err(From::from).and_then(|()| {
-            pattern().and_then_fail(|f| todo!()).and_then(|p| {
+            pattern().and_then_fail(|_f| todo!()).and_then(|p| {
                 token_eq(Token::RParen)
                     .map_err(From::from)
                     .and_then_fail(|()| todo!())
@@ -366,8 +366,8 @@ fn assignment_statement<'a>() -> Parser<'a, Statement> {
 /// Parses a list of names in parenthesis like `(hello cruel world)`.
 /// In case of wrong syntax, doesn't fail - errors instead.
 fn parenthesis_name_list<'a>(
-    on_missing_left_paren: fn() -> Error,
-    on_missing_right_paren: fn() -> Error,
+    on_missing_left_paren: fn() -> Error<'a>,
+    on_missing_right_paren: fn() -> Error<'a>,
 ) -> Parser<'a, Vec<Rc<String>>> {
     // (
     token_eq::<()>(Token::LParen)
@@ -538,7 +538,7 @@ fn program<'a>() -> Parser<'a, Program> {
     })
 }
 
-pub fn parse(text: &str) -> Result<Program, Error> {
+pub fn parse<'a>(text: &'a str) -> Result<Program, Error<'a>> {
     let state = text.into();
     match program().parse(state) {
         ParseResult::Ok(prog, _) => Ok(prog),

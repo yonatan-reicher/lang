@@ -7,6 +7,8 @@ use derive_more::From;
 use nessie_parse::one_of;
 use thiserror::Error;
 
+use crate::position::Position;
+
 // This parser is built on top of Nessie Parse. Parsers can either return, fail,
 // or error. The difference between failure and error is that failures are
 // supposed to be recovered from.
@@ -16,7 +18,7 @@ use thiserror::Error;
 // does not apply.
 
 /// The parser type we use.
-type Parser<'a, T, F, E = Error> = nessie_parse::Parser<'a, T, E, F>;
+type Parser<'a, T, F, E = Error<'a>> = nessie_parse::Parser<'a, T, E, F>;
 
 #[derive(Clone, Debug, From, PartialEq, Eq)]
 pub enum Token {
@@ -77,8 +79,8 @@ fn default<T: Default>() -> T {
     T::default()
 }
 
-fn position<'a, F: 'a, E: 'a>() -> Parser<'a, usize, F, E> {
-    Parser::state().map(|state| state.pos.offset)
+fn position<'a, F: 'a, E: 'a>() -> Parser<'a, Position<'a>, F, E> {
+    Parser::state().map(|state| Position::new(state.text, state.pos.offset))
 }
 
 // The implementation
@@ -88,7 +90,7 @@ derive_all![
     struct NoDigit;
 ];
 
-fn number<'a>() -> Parser<'a, Token, NoDigit> {
+fn number<'a, E: 'a>() -> Parser<'a, Token, NoDigit, E> {
     Parser::digit()
         .or_fail(NoDigit)
         .repeat_1()
@@ -143,14 +145,14 @@ derive_all![
     struct NoIdentifier(NoLetterOrUnderscore);
 ];
 
-fn identifier_or_keyword<'a>() -> Parser<'a, Token, NoIdentifier> {
-    fn start_char<'a>() -> Parser<'a, char, NoLetterOrUnderscore> {
+fn identifier_or_keyword<'a, E: 'a>() -> Parser<'a, Token, NoIdentifier, E> {
+    fn start_char<'a, E: 'a>() -> Parser<'a, char, NoLetterOrUnderscore, E> {
         Parser::char()
             .or_fail(default())
             .filter(|&c| c.is_alphabetic() || c == '_')
     }
 
-    fn end_char<'a>() -> Parser<'a, char, NoLetterOrUnderscoreOrDigit> {
+    fn end_char<'a, E: 'a>() -> Parser<'a, char, NoLetterOrUnderscoreOrDigit, E> {
         Parser::char()
             .or_fail(default())
             .filter(|&c| c.is_alphanumeric() || c == '_')
@@ -184,29 +186,26 @@ derive_all![ - Default
     struct NoSymbol(&'static str);
 ];
 
-fn symbol<'a>(s: &'static str, ret: Token) -> Parser<'a, Token, NoSymbol> {
+fn symbol<'a, E: 'a>(s: &'static str, ret: Token) -> Parser<'a, Token, NoSymbol, E> {
     Parser::expect_string(s)
         .map(move |()| ret.clone())
         .or_fail(NoSymbol(s))
 }
 
-/// A monolith error type for this parser.
 #[derive(Clone, Debug, Error, From, PartialEq)]
-#[error("{0}")]
-#[allow(private_interfaces)]
-pub enum Error {
-    #[error("{0}")]
-    NoIdentifier(NoIdentifier),
-    #[error("{0}")]
-    NoSymbol(NoSymbol),
-    #[error("{0}")]
-    NoNumber(NoDigit),
-    #[error("{0}")]
-    NoQuote(NoQuote),
-    #[error("{0}")]
-    String(StringError),
-    #[error("{}", .0.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(", "))]
-    Many(Vec<Error>),
+#[error("{position} {kind}")]
+pub struct Error<'a> {
+    position: Position<'a>,
+    kind: ErrorKind,
+}
+
+#[derive(Clone, Debug, Error, From, PartialEq)]
+pub enum ErrorKind {
+    #[error("unclosed quote ('\"')")]
+    #[from(StringError)]
+    UnclosedQuote,
+    #[error("could not understand this token")]
+    NonsenseToken,
 }
 
 derive_all![
@@ -218,29 +217,31 @@ derive_all![
 pub fn token<'a>() -> Parser<'a, Token, EofFail> {
     Parser::skip_whitespace()
         .and_then(|()| Parser::eof().not::<EofFail>())
-        .and_then(|()| {
+        .and_then(|()| position())
+        .and_then(|position| {
             one_of![
                 // Symbols should be added here
-                symbol("_", Token::Underscore).map_fail(Error::from),
-                symbol(";", Token::Semicolon).map_fail(Error::from),
-                symbol(":", Token::Colon).map_fail(Error::from),
-                symbol("=>", Token::FatArrow).map_fail(Error::from),
-                symbol("=", Token::Eq).map_fail(Error::from),
-                symbol(",", Token::Comma).map_fail(Error::from),
-                symbol("+", Token::Plus).map_fail(Error::from),
-                symbol("-", Token::Minus).map_fail(Error::from),
-                symbol("*", Token::Star).map_fail(Error::from),
-                symbol("/", Token::Slash).map_fail(Error::from),
-                symbol("(", Token::LParen).map_fail(Error::from),
-                symbol(")", Token::RParen).map_fail(Error::from),
-                symbol("{", Token::LCurly).map_fail(Error::from),
-                symbol("}", Token::RCurly).map_fail(Error::from),
-                symbol("|", Token::Pipe).map_fail(Error::from),
-                identifier_or_keyword().map_fail(Error::from),
-                number().map_fail(Error::from),
-                string().map_fail(Error::from).map_err(Error::from),
+                symbol("_", Token::Underscore).or_fail(()),
+                symbol(";", Token::Semicolon).or_fail(()),
+                symbol(":", Token::Colon).or_fail(()),
+                symbol("=>", Token::FatArrow).or_fail(()),
+                symbol("=", Token::Eq).or_fail(()),
+                symbol(",", Token::Comma).or_fail(()),
+                symbol("+", Token::Plus).or_fail(()),
+                symbol("-", Token::Minus).or_fail(()),
+                symbol("*", Token::Star).or_fail(()),
+                symbol("/", Token::Slash).or_fail(()),
+                symbol("(", Token::LParen).or_fail(()),
+                symbol(")", Token::RParen).or_fail(()),
+                symbol("{", Token::LCurly).or_fail(()),
+                symbol("}", Token::RCurly).or_fail(()),
+                symbol("|", Token::Pipe).or_fail(()),
+                identifier_or_keyword().or_fail(()),
+                number().or_fail(()),
+                string().or_fail(()).map_err(ErrorKind::from),
             ]
-            .and_then_fail(|errors| Parser::err(Error::Many(errors)))
+            .and_then_fail(|()| Parser::err(ErrorKind::NonsenseToken))
+            .map_err(move |kind| Error { position, kind })
         })
 }
 

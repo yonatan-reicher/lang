@@ -4,6 +4,7 @@
 pub mod ast;
 pub mod value;
 pub mod value_ref;
+pub mod position;
 pub mod lex;
 pub mod parse;
 /// Defines the context of the interpreter while it is running.
@@ -20,7 +21,9 @@ pub mod io_commands;
 
 /// This function returns a vector of values that were printed during execution.
 /// The RETURN VALUE of the program is IGNORED.
-pub fn execute_string(source_code: &str) -> Result<Vec<value::Value>, Box<dyn std::error::Error>> {
+pub fn execute_string<'text>(
+    source_code: &'text str,
+) -> Result<Vec<value::Value>, Box<dyn std::error::Error + 'text>> {
     let out = Default::default();
     let mut context = context::Context {
         vars: [].into(),
