@@ -5,6 +5,7 @@ use derive_more::{Debug, Display};
 #[display("[{}:{}]", self.line(), self.column())]
 pub struct Position<'a> {
     pub text: &'a str,
+    // TODO: Maybe use nessie_parse::Pos instead?
     pub offset: usize,
 }
 
