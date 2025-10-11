@@ -7,6 +7,7 @@ use std::rc::Rc;
 // use from this crate
 use crate::ast::{BinOp, Expr, MatchArm, ModuleDecl, Pattern, Program, Statement};
 use crate::lex::{EofFail, Error as LexError, Token, token, token_eq, token_ident};
+use crate::position::Position;
 // use libraries
 use derive_more::From;
 use nessie_parse::{ParseResult, one_of};
@@ -25,24 +26,29 @@ use thiserror::Error;
 /// A monolith error type for this parser.
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum Error<'text> {
-    #[error("Unrecognized token: {0}")]
+    #[error("{0}")]
     UnregocnizedToken(LexError<'text>),
     // atom: ( expr )
     #[error("Expected an expression after '('. No expression because: {0}")]
     NoExprAfterLParen(ExprFailure),
-    #[error("Expected a ')' here, because the expression ends here, but the ')' was not found")]
-    MissingRParen,
+    #[error(
+        "The '(' at {l_paren_pos} was not closed, expected it to be closed at {expected_r_pos_at}"
+    )]
+    MissingRParen {
+        l_paren_pos: Position<'text>,
+        expected_r_pos_at: Position<'text>,
+    },
     // binop expr
     #[error("Missing expression after binary operator")]
-    MissingExprAfterBinOp(ExprFailure),
+    MissingExprAfterBinOp(Position<'text>, ExprFailure),
     #[error("Print statement expects a single argument (print x)")]
-    PrintStatementExpectsSingleArgument,
+    PrintStatementExpectsSingleArgument(Position<'text>),
     #[error("Assignment statement expected an expression")]
     AssignmentStatementExpectsExpression,
-    #[error("Did not find function body")]
-    NoFunctionBody,
-    #[error("Expected to a see a name after `module` keyword")]
-    ExpectedModuleName,
+    #[error("Did not find function body at {0}")]
+    NoFunctionBody(Position<'text>),
+    #[error("Expected to a see a name after `module` keyword at {0}")]
+    ExpectedModuleName(Position<'text>),
     #[error("Expected to a see a name after `import` keyword")]
     ExpectedModuleNameImport,
     #[error(
@@ -110,24 +116,37 @@ derive_all![
     struct NoAtom(NoLParen, NoNumber, NoIdent);
 ];
 
+fn position<'a, E: 'a>() -> Parser<'a, Position<'a>, E> {
+    Parser::state().map(|s| Position::new(s.text, s.pos.offset))
+}
+
 fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
-    token()
-        .or_fail(default())
-        .map_err(Error::from)
-        .and_then(|token| match token {
-            Token::LParen => expr()
-                .and_then_fail(|f| Parser::err(Error::NoExprAfterLParen(f)))
-                .and_then(|expr| {
-                    token_eq::<()>(Token::RParen)
-                        .map_err(Error::from)
-                        .map(move |_| expr.clone())
-                        .or_err(Error::MissingRParen)
-                }),
-            Token::Number(n) => Parser::ret(Expr::Int(n)),
-            Token::Ident(ident) => Parser::ret(Expr::Var(ident.as_ref().clone())),
-            Token::String(s) => Parser::ret(Expr::Str(s.clone())),
-            _ => Parser::fail(NoAtom::default()),
-        })
+    position().and_then(|start| {
+        token()
+            .or_fail(default())
+            .map_err(Error::from)
+            .and_then(move |token| match token {
+                Token::LParen => expr()
+                    .and_then_fail(|f| Parser::err(Error::NoExprAfterLParen(f)))
+                    .and_then(move |expr| {
+                        token_eq::<()>(Token::RParen)
+                            .map_err(Error::from)
+                            .map(move |_| expr.clone())
+                            .and_then_fail(move |()| {
+                                position().and_then(move |pos| {
+                                    Parser::err(Error::MissingRParen {
+                                        l_paren_pos: start,
+                                        expected_r_pos_at: pos,
+                                    })
+                                })
+                            })
+                    }),
+                Token::Number(n) => Parser::ret(Expr::Int(n)),
+                Token::Ident(ident) => Parser::ret(Expr::Var(ident.as_ref().clone())),
+                Token::String(s) => Parser::ret(Expr::Str(s.clone())),
+                _ => Parser::fail(NoAtom::default()),
+            })
+    })
 }
 
 derive_all![
@@ -141,11 +160,15 @@ fn function_expr<'a>() -> Parser<'a, Expr, NoFunction> {
             .map_err(Error::from)
             .and_then(move |()| {
                 let param_name = param_name.clone();
-                expr().or_err(Error::NoFunctionBody).map(move |body| {
-                    let name = param_name.clone();
-                    let body = body.clone();
-                    Expr::Func(name.as_ref().into(), body.into())
-                })
+                expr()
+                    .and_then_fail(|_| {
+                        position().and_then(|pos| Parser::err(Error::NoFunctionBody(pos)))
+                    })
+                    .map(move |body| {
+                        let name = param_name.clone();
+                        let body = body.clone();
+                        Expr::Func(name.as_ref().into(), body.into())
+                    })
             })
     })
 }
@@ -215,7 +238,10 @@ fn binop_expr<'a>() -> Parser<'a, Expr, NoBinOpExpr> {
         binop().map_fail(Into::into).and_then(move |op| {
             let left = left.clone();
             expr()
-                .and_then_fail(|f| Parser::err(Error::MissingExprAfterBinOp(f)))
+                .and_then_fail(|f| {
+                    position()
+                        .and_then(move |p| Parser::err(Error::MissingExprAfterBinOp(p, f.clone())))
+                })
                 .map(move |right| Expr::BinOp(Box::new(left.clone()), op, Box::new(right)))
         })
     })
@@ -346,9 +372,9 @@ fn pattern<'a>() -> Parser<'a, Pattern, EofFail> {
 
 fn print_statement<'a>() -> Parser<'a, Statement> {
     token_eq(Token::Print).map_err(Error::from).and_then(|()| {
-        atom()
-            .map(Statement::Print)
-            .or_err(Error::PrintStatementExpectsSingleArgument)
+        atom().map(Statement::Print).and_then_fail(|_| {
+            position().and_then(|p| Parser::err(Error::PrintStatementExpectsSingleArgument(p)))
+        })
     })
 }
 
@@ -507,7 +533,9 @@ fn module_declaration<'a>() -> Parser<'a, ModuleDecl> {
     token_eq(Token::Module).map_err(Error::from).and_then(|()| {
         token_ident::<()>()
             .map_err(Error::from)
-            .or_err(Error::ExpectedModuleName)
+            .and_then_fail(|()| {
+                position().and_then(|pos| Parser::err(Error::ExpectedModuleName(pos)))
+            })
             .and_then(|name| {
                 module_exporting().maybe().map(move |exports| ModuleDecl {
                     name: name.as_ref().clone(),
