@@ -1,6 +1,7 @@
-use derive_more::Display;
+use derive_more::{Debug, Display};
 
 #[derive(Clone, Copy, Debug, Display)]
+#[debug("Position(line={}, column={})", self.line(), self.column())]
 #[display("[{}:{}]", self.line(), self.column())]
 pub struct Position<'a> {
     pub text: &'a str,
