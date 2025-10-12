@@ -225,6 +225,13 @@ impl Expr {
                 }
                 Err(Error::MatchExprMismatch(x))
             }
+            Expr::Statements(statements, expr) => {
+                let mut context = context.clone();
+                for statement in statements {
+                    statement.execute(&mut context)?;
+                }
+                expr.eval(&context)
+            }
         }
     }
 

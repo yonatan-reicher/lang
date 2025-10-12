@@ -29,8 +29,16 @@ pub enum Error<'text> {
     #[error("{0}")]
     UnregocnizedToken(LexError<'text>),
     // atom: ( expr )
-    #[error("Expected an expression after '('. No expression because: {0}")]
-    NoExprAfterLParen(ExprFailure),
+    #[error("Expected an expression or a statement after '('. No expression because: {0}")]
+    NoExprNorStatementAfterLParen(ExprFailure),
+    #[error(
+        "Expected an expression at the end of this block (block started at {start}, expected expression at {expected_at})"
+    )]
+    ExpectedAnExpressionAtTheEndOfThisBlock {
+        start: Position<'text>,
+        expected_at: Position<'text>,
+        no_expression_because: ExprFailure,
+    },
     #[error(
         "The '(' at {l_paren_pos} was not closed, expected it to be closed at {expected_r_pos_at}"
     )]
@@ -126,12 +134,12 @@ fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
             .or_fail(default())
             .map_err(Error::from)
             .and_then(move |token| match token {
-                Token::LParen => expr()
-                    .and_then_fail(|f| Parser::err(Error::NoExprAfterLParen(f)))
-                    .and_then(move |expr| {
+                Token::LParen => block()
+                    .and_then_fail(|f| Parser::err(Error::NoExprNorStatementAfterLParen(f)))
+                    .and_then(move |block| {
                         token_eq::<()>(Token::RParen)
                             .map_err(Error::from)
-                            .map(move |_| expr.clone())
+                            .map(move |_| block.clone())
                             .and_then_fail(move |()| {
                                 position().and_then(move |pos| {
                                     Parser::err(Error::MissingRParen {
@@ -140,6 +148,29 @@ fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
                                     })
                                 })
                             })
+                    })
+                    .and_then(move |block| {
+                        let block = block.clone();
+                        position().and_then(move |end| {
+                            let statements = block.statements.clone();
+                            let expr = match block.return_expr.clone() {
+                                Ok(e) => e,
+                                Err(no_expression_because) => {
+                                    return Parser::err(
+                                        Error::ExpectedAnExpressionAtTheEndOfThisBlock {
+                                            start,
+                                            expected_at: end,
+                                            no_expression_because,
+                                        },
+                                    );
+                                }
+                            };
+                            Parser::ret(if !statements.is_empty() {
+                                Expr::Statements(statements, expr.into())
+                            } else {
+                                expr
+                            })
+                        })
                     }),
                 Token::Number(n) => Parser::ret(Expr::Int(n)),
                 Token::Ident(ident) => Parser::ret(Expr::Var(ident.as_ref().clone())),
@@ -485,37 +516,34 @@ fn statement<'a>() -> Parser<'a, Statement, NotAStatement> {
     })
 }
 
-#[derive(Clone, Debug, Default, From, PartialEq)]
+#[derive(Clone, Debug, From, PartialEq)]
 struct Block {
     statements: Vec<Statement>,
-    return_expr: Option<Expr>,
+    return_expr: Result<Expr, ExprFailure>,
 }
 
 /// Parse a block - a series of statements, maybe followed by a returned
 /// expression. Does not parse any braces or delimiters around.
 fn block<'a, F: 'a>() -> Parser<'a, Block, F> {
-    one_of![
-        statement().map_fail(|_| ()).and_then(|statement| {
-            let statement_clone = statement.clone();
-            block::<()>()
-                .map(move |mut block| {
-                    block.statements.insert(0, statement.clone());
-                    block
-                })
-                .or_ret(Block {
-                    statements: vec![statement_clone.clone()],
-                    return_expr: None,
-                })
-        }),
-        expr()
-            .map(|e| Block {
-                statements: vec![],
-                return_expr: Some(e),
+    statement()
+        // A block starting with a statement expects the rest of the block - to
+        // be just another block! We can just recurse.
+        .and_then(|statement| {
+            block().map(move |mut block| {
+                block.statements.insert(0, statement.clone());
+                block
             })
-            .or_fail(()),
-    ]
-    .map_fail(|()| ()) // Annotate the failure type
-    .or_ret(Block::default())
+        })
+        // No statement - may or may not have an expression.
+        .and_then_fail(|_| {
+            expr()
+                .map(Ok)
+                .and_then_fail(|f| Parser::ret(Err(f)))
+                .map(|return_expr| Block {
+                    statements: vec![],
+                    return_expr,
+                })
+        })
 }
 
 fn module_exporting<'a>() -> Parser<'a, Vec<Rc<String>>> {
@@ -560,7 +588,7 @@ fn program<'a>() -> Parser<'a, Program> {
             .map(move |block| Program {
                 module_decl: module_decl.clone(),
                 statements: block.statements,
-                return_expr: block.return_expr,
+                return_expr: block.return_expr.ok(),
             })
             .or_err(err)
     })

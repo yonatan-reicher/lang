@@ -54,6 +54,9 @@ pub enum Expr {
     #[from]
     App(Vec<Expr>),
     Match(Box<Expr>, Vec<MatchArm>),
+    /// An expression preceded by zero or more statements. The names introduced
+    /// by the statements are not available outside the expression.
+    Statements(Vec<Statement>, Box<Expr>),
 }
 
 #[derive(Clone, Debug, derive_more::From, PartialEq)]
