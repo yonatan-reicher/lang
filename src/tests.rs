@@ -127,7 +127,7 @@ fn complex_syntax() {
             fix
         );
 
-        print_file = fix (print_file => p =>
+        print_file = fix (print_file => p => (
             print_files = fix (print_files => l =>
                 match l
                 | Nil => None
@@ -139,9 +139,9 @@ fn complex_syntax() {
                 then Read p print_files
                 else Print p None
             )
-        );
+        ));
 
-        print (print_file ".")
+        Print (print_file ".")
     "#});
     dbg!(&res);
 
