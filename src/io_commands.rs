@@ -28,6 +28,8 @@ pub enum IoCommand {
         text: Rc<str>,
         next: Rc<IoCommand>,
     },
+    #[display("(IsDir {0} {_1})", _0.display())]
+    IsDir(Rc<Path>, Rc<Func>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -102,6 +104,7 @@ impl IoCommand {
             print,
             read,
             write,
+            is_dir,
         } = &stdlib.io_commands;
 
         // Categorize by label.
@@ -137,6 +140,11 @@ impl IoCommand {
                 text: text.clone(),
                 next: Rc::new(IoCommand::of_value(next, stdlib)?),
             })
+        } else if label == is_dir {
+            args!(x, [Value::Str(path), f] = args);
+            func!(x, "f", Func f = f);
+            let path = Path::new(path.as_ref());
+            Ok(IoCommand::IsDir(path.into(), f.clone()))
         } else {
             Err(IoCommandError::NotAnIoCommand { value: x.clone() })
         }
@@ -189,6 +197,12 @@ impl IoCommand {
             IoCommand::Write { path, text, next } => {
                 let text: &str = text;
                 std::fs::write(path, text)?;
+                next.execute(stdlib, input)
+            }
+            IoCommand::IsDir(path, f) => {
+                let is_dir = path.is_dir();
+                let next = f.apply(Value::Bool(is_dir)).map_err(eval_error)?;
+                let next = Self::of_value(&next, stdlib)?;
                 next.execute(stdlib, input)
             }
         }

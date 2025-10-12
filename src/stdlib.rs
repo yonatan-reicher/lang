@@ -20,6 +20,7 @@ pub struct IoCommands {
     pub print: PLabel,
     pub read: PLabel,
     pub write: PLabel,
+    pub is_dir: PLabel,
 }
 
 #[derive(Clone, Debug)]
@@ -42,7 +43,7 @@ impl Module {
 }
 
 impl Stdlib {
-    pub const N_IO_COMMANDS: usize = 6;
+    pub const N_IO_COMMANDS: usize = 7;
     pub fn io_commands_all(&self) -> [PLabel; Self::N_IO_COMMANDS] {
         let IoCommands {
             input,
@@ -51,6 +52,7 @@ impl Stdlib {
             print,
             read,
             write,
+            is_dir,
         } = &self.io_commands;
         [
             input.clone(),
@@ -59,6 +61,7 @@ impl Stdlib {
             print.clone(),
             read.clone(),
             write.clone(),
+            is_dir.clone(),
         ]
     }
 }
@@ -140,6 +143,10 @@ impl Stdlib {
                 name: "Write".into(),
                 parameters: vec!["path".to_string(), "text".into(), "next".into()],
             }),
+            is_dir: PLabel::from(Label {
+                name: "IsDir".into(),
+                parameters: vec!["path".to_string(), "f".into()],
+            }),
         };
 
         let list = List {
@@ -172,6 +179,7 @@ impl Stdlib {
                     print,
                     read,
                     write,
+                    is_dir,
                 },
             list: List { cons, nil },
             other: Other { abs, neg, fix },
@@ -190,6 +198,7 @@ impl Stdlib {
                 ("Print".into(), LabelFunc::from(print.clone()).into()),
                 ("Read".into(), LabelFunc::from(read.clone()).into()),
                 ("Write".into(), LabelFunc::from(write.clone()).into()),
+                ("IsDir".into(), LabelFunc::from(is_dir.clone()).into()),
                 ("Abs".into(), abs.clone().into()),
                 ("Neg".into(), neg.clone().into()),
                 ("Fix".into(), fix.clone().into()),
