@@ -141,7 +141,7 @@ fn complex_syntax() {
             )
         ));
 
-        Print (print_file ".")
+        print (print_file ".");
     "#});
     dbg!(&res);
 
