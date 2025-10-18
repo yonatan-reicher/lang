@@ -185,7 +185,15 @@ impl IoCommand {
             }
             IoCommand::None => Ok(()),
             IoCommand::Print { value, next } => {
-                println!("{value}");
+                match value {
+                    Value::Str(s) => {
+                        println!("{s}");
+                    }
+                    _ => {
+                        // TODO: Don't allow this!
+                        println!("{value}");
+                    }
+                }
                 next.execute(stdlib, input)
             }
             IoCommand::Read(path, f) => {
