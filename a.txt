@@ -1,5 +1,40 @@
-import stdlib exposing (Print None);
+import stdlib exposing (
+    Cons
+    IsDir
+    Ls
+    Nil
+    None
+    Print
+    Read
+    fix
+);
 
-f = (x => x + 1);
+foreach = fix (foreach => f => list => next =>
+    match list
+    | Nil => next
+    | Cons h t => (f h) (foreach f t next)
+);
 
-Print 1 (Print (f 5) None)
+print_file_with_depth = fix (recurse => path => n => next => (
+    if n = 0 then Print path next else
+    IsDir path (is_dir => (
+        if is_dir
+        then (
+            Ls path (files => 
+                if files = Nil then 
+                    Print (path + " (empty dir)") next
+                else foreach
+                    (file => (
+                        path = path + "/" + file;
+                        recurse path (n - 1)
+                    ))
+                    files
+                    next
+            )
+        )
+        else Print path next
+    ))
+));
+print_file = file => print_file_with_depth file 2;
+
+Ls "." (files => foreach print_file files None)
