@@ -72,7 +72,13 @@ impl MainConfig {
     }
 }
 
-fn run_text(text: &str) -> Result<()> {
+#[derive(Debug, Default)]
+struct Config {
+    expose_stdlib_by_default: bool,
+}
+
+fn run_text(text: &str, config: Config) -> Result<()> {
+    let Config { expose_stdlib_by_default } = config;
     let program = parse(text).unwrap_or_else(|err| {
         eprintln!("Error parsing program: {err}");
         exit(1);
@@ -80,6 +86,12 @@ fn run_text(text: &str) -> Result<()> {
     dbg!(&program);
     let mut context = Context::default();
     let stdlib = context.add_stdlib();
+    if expose_stdlib_by_default {
+        Statement::Import {
+            module_name: "stdlib".into(),
+            imports: stdlib.module().values.keys().cloned().collect(),
+        }.execute(&mut context)?;
+    }
     let Some(ret) = program.execute(&mut context)? else {
         eprintln!("This program does not return a value");
         exit(0);
@@ -115,7 +127,7 @@ fn main() {
                 .map(|line| line.unwrap())
                 .collect::<Vec<_>>()
                 .join("\n");
-            handle_error(run_text(&text));
+            handle_error(run_text(&text, Default::default()));
         }
         Command::File(path_buf) => {
             let text = std::fs::read_to_string(&path_buf).unwrap_or_else(|err| {
@@ -124,7 +136,7 @@ fn main() {
                 eprintln!("IO Error: {err}");
                 panic!();
             });
-            handle_error(run_text(&text));
+            handle_error(run_text(&text, Default::default()));
         }
         Command::Repl => {
             let mut line = String::new();
@@ -136,11 +148,13 @@ fn main() {
                     .read_line(&mut line)
                     .expect("stdin should be readable");
                 // TODO
-                handle_error(run_text(&line));
                 if line.trim() == "q" {
                     break;
                 }
                 // TODO
+                handle_error(run_text(&line, Config {
+                    expose_stdlib_by_default: true,
+                }));
             }
         }
         Command::Error(items) => {
