@@ -35,8 +35,6 @@ pub struct Other {
     pub abs: Rc<Func>,
     pub neg: Rc<Func>,
     pub fix: Rc<Func>,
-    pub _true: Label,
-    pub _false: Label,
 }
 
 impl Module {
@@ -137,8 +135,6 @@ impl Stdlib {
             abs,
             neg,
             fix,
-            _true,
-            _false,
         };
 
         let io_commands = IoCommands {
@@ -210,8 +206,6 @@ impl Stdlib {
                     abs,
                     neg,
                     fix,
-                    _true,
-                    _false,
                 },
         } = self;
         Module {
@@ -234,14 +228,6 @@ impl Stdlib {
                 ("abs".into(), abs.clone().into()),
                 ("neg".into(), neg.clone().into()),
                 ("fix".into(), fix.clone().into()),
-                (
-                    "True".into(),
-                    Labeled::new_no_args(_true.clone()).into(),
-                ),
-                (
-                    "False".into(),
-                    Labeled::new_no_args(_false.clone()).into(),
-                ),
             ]
             .into(),
         }
