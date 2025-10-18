@@ -176,6 +176,8 @@ pub enum Error {
     LabelPatternWrongNumberOfArguments { label: Label, args: usize },
     #[error("no match arm matched the value '{0}'")]
     MatchExprMismatch(Value),
+    #[error("an if condition was not a boolean value, was '{0}'")]
+    IfCondNotBool(Value),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -233,6 +235,17 @@ impl Expr {
                 }
                 expr.eval(&context)
             }
+            Expr::If(sub_exprs) => {
+                let (cond, x, y) = sub_exprs.as_ref();
+                let cond = cond.eval(context)?;
+                let next = match cond {
+                    Value::Bool(true) => x,
+                    Value::Bool(false) => y,
+                    cond => return Err(Error::IfCondNotBool(cond)),
+                };
+                next.eval(context)
+            }
+            Expr::Bool(b) => Ok(Value::Bool(*b)),
         }
     }
 

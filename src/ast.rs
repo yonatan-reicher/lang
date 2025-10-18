@@ -40,6 +40,8 @@ pub enum Statement {
 #[derive(Clone, Debug, derive_more::From, PartialEq)]
 pub enum Expr {
     #[from]
+    Bool(bool),
+    #[from]
     Int(i64),
     #[from(Rc<str>, String, &str)]
     Str(Rc<str>),
@@ -57,6 +59,8 @@ pub enum Expr {
     /// An expression preceded by zero or more statements. The names introduced
     /// by the statements are not available outside the expression.
     Statements(Vec<Statement>, Box<Expr>),
+    /// if cond then x else y
+    If(Box<(Expr, Expr, Expr)>),
 }
 
 #[derive(Clone, Debug, derive_more::From, PartialEq)]

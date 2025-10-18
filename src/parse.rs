@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 // use from this crate
 use crate::ast::{BinOp, Expr, MatchArm, ModuleDecl, Pattern, Program, Statement};
-use crate::lex::{EofFail, Error as LexError, Token, token, token_eq, token_ident};
+use crate::lex::{EofFail, Error as LexError, Token, token, token_ident};
 use crate::position::Position;
 // use libraries
 use derive_more::From;
@@ -126,6 +126,10 @@ derive_all![
 
 fn position<'a, E: 'a>() -> Parser<'a, Position<'a>, E> {
     Parser::state().map(|s| Position::new(s.text, s.pos.offset))
+}
+
+fn token_eq<'a, F: 'a + Clone + Default>(t: Token) -> Parser<'a, (), F> {
+    crate::lex::token_eq(t).map_err(Error::from)
 }
 
 fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
@@ -324,6 +328,37 @@ fn match_expr<'a>() -> Parser<'a, Expr, NoMatchKeyword> {
     })
 }
 
+derive_all![
+    #[error("should be an `if` keyword at the start of an If expression.")]
+    struct NoIfKeyword;
+];
+
+fn if_expr<'a>() -> Parser<'a, Expr, NoIfKeyword> {
+    token_eq(Token::If).and_then(move |()| {
+        expr().and_then_fail(|_| todo!()).and_then(move |cond| {
+            let cond = Rc::new(cond);
+            token_eq(Token::Then)
+                .and_then_fail(|()| todo!())
+                .and_then(move |()| {
+                let cond = cond.clone();
+                expr().and_then_fail(|_| todo!()).and_then(move |x| {
+                    let cond = cond.clone();
+                    let x = Rc::new(x);
+                    token_eq(Token::Else)
+                        .and_then_fail(|()| todo!())
+                        .and_then(move |()| {
+                        let cond = cond.clone();
+                        let x = x.clone();
+                        expr().and_then_fail(|_| todo!()).map(move |y| {
+                            Expr::If(Box::new((cond.as_ref().clone(), x.as_ref().clone(), y)))
+                        })
+                    })
+                })
+            })
+        })
+    })
+}
+
 // TODO
 derive_all![ - Default
     #[allow(private_interfaces)]
@@ -336,6 +371,8 @@ derive_all![ - Default
         NoBinOpExpr(NoBinOpExpr),
         #[error("{0}")]
         NoMatchKeyword(NoMatchKeyword),
+        #[error("{0}")]
+        NoIfKeyword(NoIfKeyword),
         #[error("todo")] // TODO:
         Many(Vec<ExprFailure>),
     }
@@ -349,6 +386,7 @@ impl nessie_parse::CombineManyFail<'_, ExprFailure> for ExprFailure {
 
 fn expr<'a>() -> Parser<'a, Expr, ExprFailure> {
     one_of![
+        if_expr().map_fail(ExprFailure::from),
         match_expr().map_fail(ExprFailure::from),
         function_expr().map_fail(ExprFailure::from),
         binop_expr().map_fail(ExprFailure::from),

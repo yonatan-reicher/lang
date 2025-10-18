@@ -56,6 +56,11 @@ pub enum Token {
     Pipe,
     /// `_`
     Underscore,
+    If,
+    Then,
+    Else,
+    True,
+    False,
 }
 
 // Some helpers
@@ -177,6 +182,11 @@ fn identifier_or_keyword<'a, E: 'a>() -> Parser<'a, Token, NoIdentifier, E> {
             "print" => Token::Print,
             "label" => Token::Label,
             "match" => Token::Match,
+            "if" => Token::If,
+            "then" => Token::Then,
+            "else" => Token::Else,
+            "true" => Token::True,
+            "false" => Token::False,
             _ => Token::Ident(ident.into()),
         })
 }
