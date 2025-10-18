@@ -1,6 +1,7 @@
 use crate::ast::{Program, Statement};
 use crate::context::Context;
-use crate::value::{Label, LabelFunc, Labeled, PLabel, Value};
+use crate::labeled::{Label, LabelInfo, Labeled};
+use crate::value::{LabelFunc, Value};
 use crate::eval;
 
 impl Statement {
@@ -29,16 +30,13 @@ impl Statement {
                 }
             }
             Statement::Label { name, parameters } => {
-                let label = PLabel::from(Label {
+                let label = Label::new(LabelInfo {
                     name: name.clone(),
-                    parameters: parameters.clone(),
+                    params: parameters.clone(),
                 });
                 // The value we are introducing to the context.
                 let value = if parameters.is_empty() {
-                    Labeled {
-                        label,
-                        args: vec![],
-                    }.into()
+                    Labeled::new_no_args(label).into()
                 } else {
                     LabelFunc::from(label).into()
                 };

@@ -4,7 +4,8 @@ use std::rc::Rc;
 use functionality::prelude::*;
 
 use crate::context::{Context, Module};
-use crate::value::{BuiltinDefinition, Func, Label, LabelFunc, Labeled, PLabel, Value};
+use crate::labeled::{Label, LabelInfo, Labeled};
+use crate::value::{BuiltinDefinition, Func, LabelFunc, Value};
 
 pub struct Stdlib {
     pub io_commands: IoCommands,
@@ -14,19 +15,19 @@ pub struct Stdlib {
 
 #[derive(Clone, Debug)]
 pub struct IoCommands {
-    pub input: PLabel,
-    pub ls: PLabel,
-    pub none: PLabel,
-    pub print: PLabel,
-    pub read: PLabel,
-    pub write: PLabel,
-    pub is_dir: PLabel,
+    pub input: Label,
+    pub ls: Label,
+    pub none: Label,
+    pub print: Label,
+    pub read: Label,
+    pub write: Label,
+    pub is_dir: Label,
 }
 
 #[derive(Clone, Debug)]
 pub struct List {
-    pub cons: PLabel,
-    pub nil: PLabel,
+    pub cons: Label,
+    pub nil: Label,
 }
 
 #[derive(Clone, Debug)]
@@ -34,6 +35,8 @@ pub struct Other {
     pub abs: Rc<Func>,
     pub neg: Rc<Func>,
     pub fix: Rc<Func>,
+    pub _true: Label,
+    pub _false: Label,
 }
 
 impl Module {
@@ -44,7 +47,7 @@ impl Module {
 
 impl Stdlib {
     pub const N_IO_COMMANDS: usize = 7;
-    pub fn io_commands_all(&self) -> [PLabel; Self::N_IO_COMMANDS] {
+    pub fn io_commands_all(&self) -> [Label; Self::N_IO_COMMANDS] {
         let IoCommands {
             input,
             ls,
@@ -77,7 +80,9 @@ impl Stdlib {
                 };
                 Ok(i.abs().into())
             }),
-        }.pipe(Func::from).pipe(Rc::new);
+        }
+        .pipe(Func::from)
+        .pipe(Rc::new);
         let neg = BuiltinDefinition {
             name: "neg".into(),
             arity: 1,
@@ -87,7 +92,9 @@ impl Stdlib {
                 };
                 Ok((-i).into())
             }),
-        }.pipe(Func::from).pipe(Rc::new);
+        }
+        .pipe(Func::from)
+        .pipe(Rc::new);
         let fix_cell: Rc<RefCell<Option<Rc<Func>>>> = Default::default();
         let fix_cell_clone = fix_cell.clone();
         let fix = BuiltinDefinition {
@@ -114,49 +121,65 @@ impl Stdlib {
                     .into(),
                 )
             }),
-        }.pipe(Func::from).pipe(Rc::new);
+        }
+        .pipe(Func::from)
+        .pipe(Rc::new);
         *fix_cell.borrow_mut() = Some(fix.clone());
-        let other = Other { abs, neg, fix };
+        let _true = Label::new(LabelInfo {
+            name: "True".into(),
+            params: vec![],
+        });
+        let _false = Label::new(LabelInfo {
+            name: "False".into(),
+            params: vec![],
+        });
+        let other = Other {
+            abs,
+            neg,
+            fix,
+            _true,
+            _false,
+        };
 
         let io_commands = IoCommands {
-            input: PLabel::from(Label {
+            input: Label::new(LabelInfo {
                 name: "Input".into(),
-                parameters: vec!["f".to_string()],
+                params: vec!["f".to_string()],
             }),
-            ls: PLabel::from(Label {
+            ls: Label::new(LabelInfo {
                 name: "Ls".into(),
-                parameters: vec!["path".into(), "f".into()],
+                params: vec!["path".into(), "f".into()],
             }),
-            none: PLabel::from(Label {
+            none: Label::new(LabelInfo {
                 name: "None".into(),
-                parameters: vec![],
+                params: vec![],
             }),
-            print: PLabel::from(Label {
+            print: Label::new(LabelInfo {
                 name: "Print".into(),
-                parameters: vec!["value".to_string(), "next".to_string()],
+                params: vec!["value".to_string(), "next".to_string()],
             }),
-            read: PLabel::from(Label {
+            read: Label::new(LabelInfo {
                 name: "Read".into(),
-                parameters: vec!["path".to_string(), "f".into()],
+                params: vec!["path".to_string(), "f".into()],
             }),
-            write: PLabel::from(Label {
+            write: Label::new(LabelInfo {
                 name: "Write".into(),
-                parameters: vec!["path".to_string(), "text".into(), "next".into()],
+                params: vec!["path".to_string(), "text".into(), "next".into()],
             }),
-            is_dir: PLabel::from(Label {
+            is_dir: Label::new(LabelInfo {
                 name: "IsDir".into(),
-                parameters: vec!["path".to_string(), "f".into()],
+                params: vec!["path".to_string(), "f".into()],
             }),
         };
 
         let list = List {
-            cons: PLabel::from(Label {
+            cons: Label::new(LabelInfo {
                 name: "Cons".into(),
-                parameters: vec!["head".into(), "tail".into()],
+                params: vec!["head".into(), "tail".into()],
             }),
-            nil: PLabel::from(Label {
+            nil: Label::new(LabelInfo {
                 name: "Nil".into(),
-                parameters: vec![],
+                params: vec![],
             }),
         };
 
@@ -182,19 +205,20 @@ impl Stdlib {
                     is_dir,
                 },
             list: List { cons, nil },
-            other: Other { abs, neg, fix },
+            other:
+                Other {
+                    abs,
+                    neg,
+                    fix,
+                    _true,
+                    _false,
+                },
         } = self;
         Module {
             values: [
-                ("Input".into(), LabelFunc::from(input.clone()).into()),
+                ("Input".into(), Value::from(LabelFunc::from(input.clone()))),
                 ("Ls".into(), LabelFunc::from(ls.clone()).into()),
-                (
-                    "None".into(),
-                    Labeled {
-                        label: none.clone(),
-                        args: vec![],
-                    }.into(),
-                ),
+                ("None".into(), Labeled::new(none.clone(), vec![]).into()),
                 ("Print".into(), LabelFunc::from(print.clone()).into()),
                 ("Read".into(), LabelFunc::from(read.clone()).into()),
                 ("Write".into(), LabelFunc::from(write.clone()).into()),
@@ -205,24 +229,26 @@ impl Stdlib {
                 ("Cons".into(), LabelFunc::from(cons.clone()).into()),
                 (
                     "Nil".into(),
-                    Labeled {
-                        label: nil.clone(),
-                        args: vec![],
-                    }.into(),
+                    Labeled::new_no_args(nil.clone()).into(),
                 ),
                 ("abs".into(), abs.clone().into()),
                 ("neg".into(), neg.clone().into()),
                 ("fix".into(), fix.clone().into()),
+                (
+                    "True".into(),
+                    Labeled::new_no_args(_true.clone()).into(),
+                ),
+                (
+                    "False".into(),
+                    Labeled::new_no_args(_false.clone()).into(),
+                ),
             ]
             .into(),
         }
     }
 
     pub fn nil(&self) -> Value {
-        Labeled {
-            label: self.list.nil.clone(),
-            args: vec![],
-        }.into()
+        Labeled::new_no_args(self.list.nil.clone()).into()
     }
 
     pub fn to_list<I>(&self, x: I) -> Value
@@ -230,12 +256,13 @@ impl Stdlib {
         I: IntoIterator<Item = Value>,
         I::IntoIter: DoubleEndedIterator,
     {
-        x.into_iter()
-            .rev()
-            .fold(self.nil(), |acc, item| Labeled {
-                label: self.list.cons.clone(),
-                args: vec![item, acc],
-            }.into())
+        x.into_iter().rev().fold(self.nil(), |acc, item| {
+            Labeled::new(
+                self.list.cons.clone(),
+                vec![item, acc],
+            )
+            .into()
+        })
     }
 }
 

@@ -2,6 +2,7 @@
 
 /// Defines the Abstract Syntax Tree.
 pub mod ast;
+pub mod labeled;
 pub mod value;
 pub mod value_ref;
 pub mod position;

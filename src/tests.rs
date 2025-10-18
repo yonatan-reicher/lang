@@ -1,4 +1,4 @@
-use crate::{execute_string, value::Labeled, value_ref::ValueRef};
+use crate::{execute_string, value_ref::ValueRef};
 use indoc::indoc;
 
 #[test]
@@ -51,16 +51,16 @@ fn test_label() {
     .unwrap();
 
     dbg!(&stdout);
-    let ValueRef::Labeled(Labeled { label, args }) = stdout[0].as_ref() else {
+    let ValueRef::Labeled(labeled) = stdout[0].as_ref() else {
         panic!()
     };
-    assert_eq!(label.name, "Cons");
-    assert_eq!(args[0], 2.into());
-    let ValueRef::Labeled(Labeled { label, args }) = args[1].as_ref() else {
+    assert_eq!(labeled.label().name, "Cons");
+    assert_eq!(labeled.args()[0], 2.into());
+    let ValueRef::Labeled(labeled) = labeled.args()[1].as_ref() else {
         panic!()
     };
-    assert_eq!(label.name, "Nil");
-    assert_eq!(args, &vec![]);
+    assert_eq!(labeled.label().name, "Nil");
+    assert_eq!(labeled.args(), &vec![]);
 }
 
 #[test]
@@ -71,17 +71,17 @@ fn test_print() {
     "})
     .unwrap();
     dbg!(&stdout);
-    let ValueRef::Labeled(Labeled { label, args }) = stdout[0].as_ref() else {
+    let ValueRef::Labeled(x) = stdout[0].as_ref() else {
         panic!()
     };
-    assert_eq!(label.name, "Print");
-    assert_eq!(args[0], 2.into());
-    let ValueRef::Labeled(Labeled { label, args }) = args[1].as_ref() else {
-        dbg!(&args[1]);
+    assert_eq!(x.label().name, "Print");
+    assert_eq!(x.args()[0], 2.into());
+    let ValueRef::Labeled(x) = x.args()[1].as_ref() else {
+        dbg!(&x.args()[1]);
         panic!()
     };
-    assert_eq!(label.name, "None");
-    assert_eq!(args, &vec![]);
+    assert_eq!(x.label().name, "None");
+    assert_eq!(x.args(), &vec![]);
 }
 
 #[test]
@@ -151,10 +151,10 @@ fn complex_syntax() {
         .cloned()
         .expect("Should produce a single value");
 
-    let ValueRef::Labeled(Labeled { label, args }) = value.as_ref() else {
+    let ValueRef::Labeled(x) = value.as_ref() else {
         panic!()
     };
 
-    assert_eq!(label.name, "IsDir");
-    assert_eq!(args.len(), 2);
+    assert_eq!(x.label().name, "IsDir");
+    assert_eq!(x.args().len(), 2);
 }

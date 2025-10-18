@@ -1,4 +1,5 @@
-use crate::value::{Func, Labeled, Value};
+use crate::labeled::Labeled;
+use crate::value::{Func, Value};
 
 
 /// The result of taking a value's fields as references. This type should be

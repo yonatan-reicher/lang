@@ -4,7 +4,8 @@ use std::rc::Rc;
 // our imports
 use crate::ast::{BinOp, Expr, MatchArm, Pattern};
 use crate::context::Context;
-use crate::value::{BuiltinFunc, Func, LabelFunc, Labeled, LambdaFunc, PLabel, Value};
+use crate::labeled::{Label, Labeled};
+use crate::value::{BuiltinFunc, Func, LabelFunc, LambdaFunc, Value};
 use crate::value_ref::ValueRef;
 // other imports
 use functionality::{Mutate, Pipe};
@@ -84,16 +85,16 @@ impl LotsOfParametersFunc for BuiltinFunc {
 impl LotsOfParametersFunc for LabelFunc {
     fn apply_finalize(&self, args: Vec<Value>) -> Result<Value> {
         assert_eq!(self.arity() as usize, args.len());
-        Labeled {
-            label: self.label.clone(),
+        Labeled::new(
+            self.label.clone(),
             args,
-        }
+        )
         .pipe(Value::from)
         .pipe(Ok)
     }
 
     fn arity(&self) -> u8 {
-        self.label.parameters.len() as _
+        self.label.params.len() as _
     }
 
     fn applied_already(&self) -> &Vec<Value> {
@@ -171,8 +172,8 @@ pub enum Error {
     DivisionByZero { lhs: Value },
     #[error("label '{name}' does not exist, but used in a pattern")]
     LabelPatternNoSuchLabel { name: String },
-    #[error("label '{label}' has {} arguments, but used in a pattern with {args} arguments", label.parameters.len())]
-    LabelPatternWrongNumberOfArguments { label: PLabel, args: usize },
+    #[error("label '{label}' has {} arguments, but used in a pattern with {args} arguments", label.params.len())]
+    LabelPatternWrongNumberOfArguments { label: Label, args: usize },
     #[error("no match arm matched the value '{0}'")]
     MatchExprMismatch(Value),
 }
@@ -298,16 +299,16 @@ impl Pattern {
                 parameter_patterns,
             } => {
                 // Match
-                if let ValueRef::Labeled(Labeled { label, args }) = x.as_ref()
-                    && label.name == *name
+                if let ValueRef::Labeled(labeled) = x.as_ref()
+                    && labeled.label().name == *name
                 {
-                    if args.len() != parameter_patterns.len() {
+                    if labeled.args().len() != parameter_patterns.len() {
                         todo!()
                     }
 
                     Ok(parameter_patterns
                         .iter()
-                        .zip(args)
+                        .zip(labeled.args())
                         // Match all subpatterns
                         .map(|(p, a)| p.matches(a, _context))
                         // Check no errors
