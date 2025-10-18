@@ -18,6 +18,7 @@ pub enum Value {
     Unit,
     /// true, false
     #[from]
+    #[display("{_0}", )]
     Bool(bool),
     /// 123
     #[from]
@@ -45,7 +46,9 @@ pub enum Func {
 }
 
 impl<T> From<T> for Value
-where T: Into<Func> {
+where
+    T: Into<Func>,
+{
     fn from(value: T) -> Self {
         Value::Func(Rc::new(value.into()))
     }
@@ -105,9 +108,7 @@ pub struct BuiltinDefinition {
     pub func: Rc<dyn Fn(&[Value]) -> crate::eval::Result<Value>>,
 }
 
-
 // Some helpers
-
 
 impl Value {
     pub const fn is_unit(&self) -> bool {
