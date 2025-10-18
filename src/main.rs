@@ -137,6 +137,10 @@ fn main() {
                     .expect("stdin should be readable");
                 // TODO
                 handle_error(run_text(&line));
+                if line.trim() == "q" {
+                    break;
+                }
+                // TODO
             }
         }
         Command::Error(items) => {
