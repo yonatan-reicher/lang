@@ -7,34 +7,56 @@ import stdlib exposing (
     Print
     Read
     fix
+    not
 );
 
+// `foreach f list next` applies f to each element of the list, and to the
+// result of the rest of the list.
+// `foreach f [1, 2, 3] next` = `(f 1)( (f 2)( (f 3) next ) )
 foreach = fix (foreach => f => list => next =>
     match list
     | Nil => next
     | Cons h t => (f h) (foreach f t next)
 );
 
+// Repeat a string n times
+string_copy = fix (recurse => s => n =>
+    if n = 0
+    then ""
+    else s + recurse s (n - 1)
+);
+
+just_print_file = path => indent => (
+    indent_str = string_copy " " indent;
+    Print (indent_str + path)
+);
+
+just_print_empty_dir = path => indent => (
+    just_print_file (path + " (empty dir)" /* A hack! */) indent
+);
+
+// `print_file_with_depth path n next` returns the io command of printing the
+// file given by the path. Directories are expanded to all of their children,
+// when the depth is small enough.
 print_file_with_depth = fix (recurse => path => n => next => (
-    if n = 0 then Print path next else
-    IsDir path (is_dir => (
-        if is_dir
-        then (
-            Ls path (files => 
-                if files = Nil then 
-                    Print (path + " (empty dir)") next
-                else foreach
-                    (file => (
-                        path = path + "/" + file;
-                        recurse path (n - 1)
-                    ))
-                    files
-                    next
-            )
+    if 2 = n
+    then just_print_file path n next
+    else IsDir path (is_dir =>
+        if not is_dir
+        then just_print_file path n next
+        else Ls path (files => 
+            if files = Nil
+            then just_print_empty_dir path n next
+            else foreach
+                (file => (
+                    path = path + "/" + file;
+                    recurse path (n + 1)
+                ))
+                files
+                next
         )
-        else Print path next
-    ))
+    )
 ));
-print_file = file => print_file_with_depth file 2;
+print_file = file => print_file_with_depth file 0;
 
 Ls "." (files => foreach print_file files None)
