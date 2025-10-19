@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 // use libraries
 use derive_more::From;
-use nessie_parse::one_of;
+use nessie_parse::{CombineFail, State, one_of};
 use thiserror::Error;
 
 use crate::position::Position;
@@ -202,6 +202,50 @@ fn symbol<'a, E: 'a>(s: &'static str, ret: Token) -> Parser<'a, Token, NoSymbol,
         .or_fail(NoSymbol(s))
 }
 
+derive_all![
+    #[error("no '//' or '/*'")]
+    struct NoCommentStart;
+];
+impl<'a> CombineFail<'a, NoCommentStart, NoCommentStart> for NoCommentStart {
+    fn combine_fail(
+        self,
+        _self_state: State<'a>,
+        _other: NoCommentStart,
+        _other_state: State<'a>,
+    ) -> NoCommentStart {
+        NoCommentStart
+    }
+}
+
+fn line_comment<'a>() -> Parser<'a, (), NoCommentStart> {
+    Parser::expect_string("//")
+        .or_fail(NoCommentStart)
+        .and_then(|()| Parser::char().filter(|c| *c != '\n').repeat_0().map(|_| ()))
+}
+
+fn inline_comment<'a>() -> Parser<'a, (), NoCommentStart> {
+    // TODO: Parse with depth
+    fn inner<'a, F: 'a>() -> Parser<'a, (), F> {
+        one_of![
+            Parser::expect_string("*/").or_fail(()),
+            inline_comment().or_fail(()),
+            Parser::char().or_fail(()).and_then(|_| inner())
+        ]
+        .and_then_fail(|()| Parser::err(todo!("unmatched '/*'")))
+    }
+    Parser::expect_string("/*")
+        .or_fail(NoCommentStart)
+        .and_then(|()| inner())
+}
+
+fn comment<'a>() -> Parser<'a, (), NoCommentStart> {
+    line_comment().or(inline_comment())
+}
+
+fn skip_things<'a, F: 'a>() -> Parser<'a, (), F> {
+    Parser::skip_whitespace().and_then(|()| comment().and_then(|()| skip_things()).or_ret(()))
+}
+
 #[derive(Clone, Debug, Error, From, PartialEq)]
 #[error("{position} {kind}")]
 pub struct Error<'a> {
@@ -225,7 +269,7 @@ derive_all![
 
 /// Parse a token from the text!
 pub fn token<'a>() -> Parser<'a, Token, EofFail> {
-    Parser::skip_whitespace()
+    skip_things() // This is where comments happen
         .and_then(|()| Parser::eof().not::<EofFail>())
         .and_then(|()| position())
         .and_then(|position| {
