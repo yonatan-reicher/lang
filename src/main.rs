@@ -73,17 +73,17 @@ impl MainConfig {
 }
 
 #[derive(Debug, Default)]
-struct Config {
+struct RunConfig {
     expose_stdlib_by_default: bool,
+    repl_printing: bool,
 }
 
-fn run_text(text: &str, config: Config) -> Result<()> {
-    let Config { expose_stdlib_by_default } = config;
+fn run_text(text: &str, config: RunConfig) -> Result<()> {
+    let RunConfig { expose_stdlib_by_default, repl_printing } = config;
     let program = parse(text).unwrap_or_else(|err| {
         eprintln!("Error parsing program: {err}");
         exit(1);
     });
-    dbg!(&program);
     let mut context = Context::default();
     let stdlib = context.add_stdlib();
     if expose_stdlib_by_default {
@@ -97,7 +97,11 @@ fn run_text(text: &str, config: Config) -> Result<()> {
         exit(0);
     };
 
-    stdlib.execute(&ret, &mut stdin().lock())?;
+    if repl_printing {
+        println!("{ret}");
+    } else {
+        stdlib.execute(&ret, &mut stdin().lock())?;
+    }
 
     Ok(())
 }
@@ -152,8 +156,9 @@ fn main() {
                     break;
                 }
                 // TODO
-                handle_error(run_text(&line, Config {
+                handle_error(run_text(&line, RunConfig {
                     expose_stdlib_by_default: true,
+                    repl_printing: true,
                 }));
             }
         }
