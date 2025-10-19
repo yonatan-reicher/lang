@@ -35,6 +35,7 @@ pub struct Other {
     pub abs: Rc<Func>,
     pub neg: Rc<Func>,
     pub fix: Rc<Func>,
+    pub not: Rc<Func>,
 }
 
 impl Module {
@@ -123,18 +124,22 @@ impl Stdlib {
         .pipe(Func::from)
         .pipe(Rc::new);
         *fix_cell.borrow_mut() = Some(fix.clone());
-        let _true = Label::new(LabelInfo {
-            name: "True".into(),
-            params: vec![],
-        });
-        let _false = Label::new(LabelInfo {
-            name: "False".into(),
-            params: vec![],
-        });
+        let not = BuiltinDefinition {
+            name: "not".into(),
+            arity: 1,
+            func: Rc::new(|values| {
+                let arg = values.first().unwrap();
+                match arg {
+                    Value::Bool(b) => Ok(Value::Bool(!b)),
+                    _ => Err(todo!()),
+                }
+            }),
+        }.pipe(Func::from).pipe(Rc::new);
         let other = Other {
             abs,
             neg,
             fix,
+            not,
         };
 
         let io_commands = IoCommands {
@@ -206,6 +211,7 @@ impl Stdlib {
                     abs,
                     neg,
                     fix,
+                    not,
                 },
         } = self;
         Module {
@@ -228,6 +234,7 @@ impl Stdlib {
                 ("abs".into(), abs.clone().into()),
                 ("neg".into(), neg.clone().into()),
                 ("fix".into(), fix.clone().into()),
+                ("not".into(), not.clone().into()),
             ]
             .into(),
         }
