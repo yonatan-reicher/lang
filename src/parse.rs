@@ -25,9 +25,9 @@ use thiserror::Error;
 
 /// A monolith error type for this parser.
 #[derive(Clone, Debug, Error, PartialEq)]
-pub enum Error<'text> {
+pub enum Error {
     #[error("{0}")]
-    UnregocnizedToken(LexError<'text>),
+    UnregocnizedToken(LexError),
     // atom: ( expr )
     #[error("Expected an expression or a statement after '('. No expression because: {0}")]
     NoExprNorStatementAfterLParen(ExprFailure),
@@ -35,28 +35,28 @@ pub enum Error<'text> {
         "Expected an expression at the end of this block (block started at {start}, expected expression at {expected_at})"
     )]
     ExpectedAnExpressionAtTheEndOfThisBlock {
-        start: Position<'text>,
-        expected_at: Position<'text>,
+        start: Position,
+        expected_at: Position,
         no_expression_because: ExprFailure,
     },
     #[error(
         "The '(' at {l_paren_pos} was not closed, expected it to be closed at {expected_r_pos_at}"
     )]
     MissingRParen {
-        l_paren_pos: Position<'text>,
-        expected_r_pos_at: Position<'text>,
+        l_paren_pos: Position,
+        expected_r_pos_at: Position,
     },
     // binop expr
     #[error("Missing expression after binary operator")]
-    MissingExprAfterBinOp(Position<'text>, ExprFailure),
+    MissingExprAfterBinOp(Position, ExprFailure),
     #[error("Print statement expects a single argument (print x)")]
-    PrintStatementExpectsSingleArgument(Position<'text>),
+    PrintStatementExpectsSingleArgument(Position),
     #[error("Assignment statement expected an expression")]
     AssignmentStatementExpectsExpression,
     #[error("Did not find function body at {0}")]
-    NoFunctionBody(Position<'text>),
+    NoFunctionBody(Position),
     #[error("Expected to a see a name after `module` keyword at {0}")]
-    ExpectedModuleName(Position<'text>),
+    ExpectedModuleName(Position),
     #[error("Expected to a see a name after `import` keyword")]
     ExpectedModuleNameImport,
     #[error(
@@ -83,14 +83,14 @@ pub enum Error<'text> {
     MatchArmExpectedExprAfterArrow(ExprFailure),
 }
 
-impl<'text> From<LexError<'text>> for Error<'text> {
-    fn from(e: LexError<'text>) -> Self {
+impl From<LexError> for Error {
+    fn from(e: LexError) -> Self {
         Error::UnregocnizedToken(e)
     }
 }
 
 /// The parser type we use.
-type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error<'a>, F>;
+type Parser<'a, T, F = ()> = nessie_parse::Parser<'a, T, Error, F>;
 
 macro_rules! derive_all {
     ( - Default /* Should be an item */ $($token:tt)* ) => {
@@ -124,7 +124,7 @@ derive_all![
     struct NoAtom(NoLParen, NoNumber, NoIdent);
 ];
 
-fn position<'a, E: 'a>() -> Parser<'a, Position<'a>, E> {
+fn position<'a, E: 'a>() -> Parser<'a, Position, E> {
     Parser::state().map(|s| Position::new(s.text, s.pos.offset))
 }
 
@@ -461,8 +461,8 @@ fn assignment_statement<'a>() -> Parser<'a, Statement> {
 /// Parses a list of names in parenthesis like `(hello cruel world)`.
 /// In case of wrong syntax, doesn't fail - errors instead.
 fn parenthesis_name_list<'a>(
-    on_missing_left_paren: fn() -> Error<'a>,
-    on_missing_right_paren: fn() -> Error<'a>,
+    on_missing_left_paren: fn() -> Error,
+    on_missing_right_paren: fn() -> Error,
 ) -> Parser<'a, Vec<Rc<String>>> {
     // (
     token_eq::<()>(Token::LParen)
@@ -632,7 +632,7 @@ fn program<'a>() -> Parser<'a, Program> {
     })
 }
 
-pub fn parse<'a>(text: &'a str) -> Result<Program, Error<'a>> {
+pub fn parse<'a>(text: &'a str) -> Result<Program, Error> {
     let state = text.into();
     match program().parse(state) {
         ParseResult::Ok(prog, _) => Ok(prog),

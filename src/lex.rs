@@ -18,7 +18,7 @@ use crate::position::Position;
 // does not apply.
 
 /// The parser type we use.
-type Parser<'a, T, F, E = Error<'a>> = nessie_parse::Parser<'a, T, E, F>;
+type Parser<'a, T, F, E = Error> = nessie_parse::Parser<'a, T, E, F>;
 
 #[derive(Clone, Debug, From, PartialEq, Eq)]
 pub enum Token {
@@ -84,7 +84,7 @@ fn default<T: Default>() -> T {
     T::default()
 }
 
-fn position<'a, F: 'a, E: 'a>() -> Parser<'a, Position<'a>, F, E> {
+fn position<'a, F: 'a, E: 'a>() -> Parser<'a, Position, F, E> {
     Parser::state().map(|state| Position::new(state.text, state.pos.offset))
 }
 
@@ -248,8 +248,8 @@ fn skip_things<'a, F: 'a>() -> Parser<'a, (), F> {
 
 #[derive(Clone, Debug, Error, From, PartialEq)]
 #[error("{position} {kind}")]
-pub struct Error<'a> {
-    position: Position<'a>,
+pub struct Error {
+    position: Position,
     kind: ErrorKind,
 }
 

@@ -28,6 +28,10 @@ enum Error {
     Eval(#[from] lang::eval::Error),
     #[error("{0}")]
     Io(#[from] std::io::Error),
+    #[error("{0}")]
+    Type(#[from] lang::typing::Error),
+    #[error("{0}")]
+    Parse(#[from] lang::parse::Error),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -72,38 +76,74 @@ impl MainConfig {
     }
 }
 
-#[derive(Debug, Default)]
-struct RunConfig {
-    expose_stdlib_by_default: bool,
-    repl_printing: bool,
+struct ReplContext {
+    pub run_context: Context,
+    pub type_context: lang::typing::Context,
 }
 
-fn run_text(text: &str, config: RunConfig) -> Result<()> {
-    let RunConfig { expose_stdlib_by_default, repl_printing } = config;
-    let program = parse(text).unwrap_or_else(|err| {
-        eprintln!("Error parsing program: {err}");
-        exit(1);
-    });
-    let mut context = Context::default();
-    let stdlib = context.add_stdlib();
-    if expose_stdlib_by_default {
+impl Default for ReplContext {
+    fn default() -> Self {
+        let mut c = Context::default();
+        let stdlib = c.add_stdlib();
         Statement::Import {
             module_name: "stdlib".into(),
             imports: stdlib.module().values.keys().cloned().collect(),
-        }.execute(&mut context)?;
+        }
+        .execute(&mut c)
+        .unwrap();
+        // TODO: Actually add the stdlib to the typing context
+        Self {
+            run_context: c,
+            type_context: Default::default(),
+        }
     }
+}
+
+impl AsRef<Context> for ReplContext {
+    fn as_ref(&self) -> &Context {
+        &self.run_context
+    }
+}
+impl AsMut<Context> for ReplContext {
+    fn as_mut(&mut self) -> &mut Context {
+        &mut self.run_context
+    }
+}
+
+fn run_repl_line(line: &str, c: &mut ReplContext) -> Result<()> {
+    let program = parse(line)?;
+    let t = program.infer(&mut c.type_context)?;
+    if let Some(t) = t {
+        println!("{t}");
+    }
+    let ret = program.execute(c.as_mut())?;
+    if let Some(ret) = ret {
+        println!("{ret}");
+    }
+    Ok(())
+}
+
+fn run_text(text: &str) -> Result<()> {
+    let mut context = Context::default();
+    let stdlib = context.add_stdlib();
+    let program = parse(text)?;
     let Some(ret) = program.execute(&mut context)? else {
         eprintln!("This program does not return a value");
         exit(0);
     };
 
-    if repl_printing {
-        println!("{ret}");
-    } else {
-        stdlib.execute(&ret, &mut stdin().lock())?;
-    }
-
+    stdlib.execute(&ret, &mut stdin().lock())?;
     Ok(())
+}
+
+fn log_error<T, E: std::fmt::Display>(res: Result<T, E>) -> Option<T> {
+    match res {
+        Ok(value) => Some(value),
+        Err(err) => {
+            eprintln!("Error: {err}");
+            None
+        }
+    }
 }
 
 fn handle_error<T, E: std::fmt::Display>(res: Result<T, E>) -> T {
@@ -131,7 +171,7 @@ fn main() {
                 .map(|line| line.unwrap())
                 .collect::<Vec<_>>()
                 .join("\n");
-            handle_error(run_text(&text, Default::default()));
+            handle_error(run_text(&text));
         }
         Command::File(path_buf) => {
             let text = std::fs::read_to_string(&path_buf).unwrap_or_else(|err| {
@@ -140,10 +180,11 @@ fn main() {
                 eprintln!("IO Error: {err}");
                 panic!();
             });
-            handle_error(run_text(&text, Default::default()));
+            handle_error(run_text(&text));
         }
         Command::Repl => {
             let mut line = String::new();
+            let mut c = ReplContext::default();
             loop {
                 print!(">   ");
                 stdout().flush().expect("stdout should be flushable");
@@ -156,10 +197,7 @@ fn main() {
                     break;
                 }
                 // TODO
-                handle_error(run_text(&line, RunConfig {
-                    expose_stdlib_by_default: true,
-                    repl_printing: true,
-                }));
+                log_error(run_repl_line(&line, &mut c));
             }
         }
         Command::Error(items) => {

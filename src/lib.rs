@@ -15,6 +15,8 @@ pub mod stdlib;
 pub mod eval;
 /// Executing programs.
 pub mod execute;
+/// Working with types and inferring them!
+pub mod typing;
 /// Implements a Read-Eval-Print-Loop that can execute commands
 pub mod repl;
 /// Executing Io operations represented as values.

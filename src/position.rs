@@ -1,38 +1,39 @@
 use derive_more::{Debug, Display};
 
 #[derive(Clone, Copy, Debug, Display)]
-#[debug("Position(line={}, column={})", self.line(), self.column())]
-#[display("[{}:{}]", self.line(), self.column())]
-pub struct Position<'a> {
-    pub text: &'a str,
+#[debug("Position(line={}, column={})", self.line, self.column)]
+#[display("[{}:{}]", self.line, self.column)]
+pub struct Position {
     // TODO: Maybe use nessie_parse::Pos instead?
+    pub line: usize,
+    pub column: usize,
     pub offset: usize,
 }
 
-impl<'a> Position<'a> {
-    pub const fn new(text: &'a str, offset: usize) -> Self {
-        Self { text, offset }
-    }
+fn get_line(text: &str, offset: usize) -> usize {
+    text[..offset]
+        .chars()
+        .filter(|&c| c == '\n')
+        .count()
+        + 1
+}
 
-    pub fn line(&self) -> usize {
-        self.text[..self.offset]
-            .chars()
-            .filter(|&c| c == '\n')
-            .count()
-            + 1
-    }
+fn get_column(text: &str, offset: usize) -> usize {
+    text[..offset]
+        .chars()
+        .rev()
+        .take_while(|&c| c != '\n')
+        .count()
+        + 1
+}
 
-    pub fn column(&self) -> usize {
-        self.text[..self.offset]
-            .chars()
-            .rev()
-            .take_while(|&c| c != '\n')
-            .count()
-            + 1
+impl Position {
+    pub fn new(text: &str, offset: usize) -> Self {
+        Self { column: get_column(text, offset), line: get_line(text, offset), offset }
     }
 }
 
-impl<'a> PartialEq for Position<'a> {
+impl PartialEq for Position {
     fn eq(&self, other: &Self) -> bool {
         assert!(
             std::ptr::eq(self, other),
