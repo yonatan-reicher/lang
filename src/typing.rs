@@ -65,13 +65,13 @@ impl ast::Expr {
                 use ast::BinOp::*;
                 match (bin_op, lhs.as_ref(), rhs.as_ref()) {
                     // int
-                    (Add | Sub | Mul | Div | Eq, Type::Int, Type::Int) => Ok(lhs.clone()),
+                    (Add | Sub | Mul | Div, Type::Int, Type::Int) => Ok(lhs.clone()),
                     // str
                     (Add, Type::Str, Type::Str) => Ok(lhs.clone()),
                     // eq
-                    (Eq, a, b) if a == b => Ok(lhs.clone()),
+                    (Eq | NEq, a, b) if a == b => Ok(Type::Bool.into()),
                     // bool
-                    (And, Type::Bool, Type::Bool) => Ok(Rc::new(Type::Bool)),
+                    (And | Or, Type::Bool, Type::Bool) => Ok(Rc::new(Type::Bool)),
                     // error
                     _ => todo!("bad op typing"),
                 }

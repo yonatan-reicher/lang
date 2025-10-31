@@ -73,6 +73,8 @@ pub enum Error {
     ExpectedAStatementOrExprAfterModuleDecl,
     #[error("there should be a statement, expression, or module declaration here")]
     ExpectedAStatementExprOrModuleDecl,
+    #[error("the program ended here")]
+    LeftOverTokens,
     #[error("there should be an expression after the match keyword")]
     NoExprAfterMatchKeyword(ExprFailure),
     #[error("should have a pattern after the '|' symbol")]
@@ -179,6 +181,8 @@ fn atom<'a>() -> Parser<'a, Expr, NoAtom> {
                 Token::Number(n) => Parser::ret(Expr::Int(n)),
                 Token::Ident(ident) => Parser::ret(Expr::Var(ident.as_ref().clone())),
                 Token::String(s) => Parser::ret(Expr::Str(s.clone())),
+                Token::True => Parser::ret(Expr::Bool(true)),
+                Token::False => Parser::ret(Expr::Bool(false)),
                 _ => Parser::fail(NoAtom::default()),
             })
     })
@@ -226,6 +230,9 @@ fn binary_op_map() -> &'static [(Token, BinOp)] {
         (Token::Star, BinOp::Mul),
         (Token::Slash, BinOp::Div),
         (Token::Eq, BinOp::Eq),
+        (Token::NEq, BinOp::NEq),
+        (Token::And, BinOp::And),
+        (Token::Or, BinOp::Or),
     ]
 }
 
@@ -340,21 +347,25 @@ fn if_expr<'a>() -> Parser<'a, Expr, NoIfKeyword> {
             token_eq(Token::Then)
                 .and_then_fail(|()| todo!())
                 .and_then(move |()| {
-                let cond = cond.clone();
-                expr().and_then_fail(|_| todo!()).and_then(move |x| {
                     let cond = cond.clone();
-                    let x = Rc::new(x);
-                    token_eq(Token::Else)
-                        .and_then_fail(|()| todo!())
-                        .and_then(move |()| {
+                    expr().and_then_fail(|_| todo!()).and_then(move |x| {
                         let cond = cond.clone();
-                        let x = x.clone();
-                        expr().and_then_fail(|_| todo!()).map(move |y| {
-                            Expr::If(Box::new((cond.as_ref().clone(), x.as_ref().clone(), y)))
-                        })
+                        let x = Rc::new(x);
+                        token_eq(Token::Else)
+                            .and_then_fail(|()| todo!())
+                            .and_then(move |()| {
+                                let cond = cond.clone();
+                                let x = x.clone();
+                                expr().and_then_fail(|_| todo!()).map(move |y| {
+                                    Expr::If(Box::new((
+                                        cond.as_ref().clone(),
+                                        x.as_ref().clone(),
+                                        y,
+                                    )))
+                                })
+                            })
                     })
                 })
-            })
         })
     })
 }
@@ -622,17 +633,21 @@ fn program<'a>() -> Parser<'a, Program> {
         } else {
             Error::ExpectedAStatementExprOrModuleDecl
         };
-        block::<()>()
-            .map(move |block| Program {
-                module_decl: module_decl.clone(),
-                statements: block.statements,
-                return_expr: block.return_expr.ok(),
-            })
-            .or_err(err)
+        block::<()>().or_err(err).and_then(move |block| {
+            let module_decl = module_decl.clone();
+            token()
+                .map_err(Error::from)
+                .and_then(|_| Parser::err(Error::LeftOverTokens))
+                .or_ret(Program {
+                    module_decl: module_decl.clone(),
+                    statements: block.statements.clone(),
+                    return_expr: block.return_expr.clone().ok(),
+                })
+        })
     })
 }
 
-pub fn parse<'a>(text: &'a str) -> Result<Program, Error> {
+pub fn parse(text: &str) -> Result<Program, Error> {
     let state = text.into();
     match program().parse(state) {
         ParseResult::Ok(prog, _) => Ok(prog),

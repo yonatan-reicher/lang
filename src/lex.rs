@@ -27,10 +27,13 @@ pub enum Token {
     Number(i64),
     #[from]
     String(Rc<str>),
+    /// `:`
     Colon,
+    /// `,`
     Comma,
     Exporting,
     Exposing,
+    /// `=>`
     FatArrow,
     Import,
     /// `{`
@@ -43,24 +46,36 @@ pub enum Token {
     RCurly,
     /// `)`
     RParen,
+    /// `;`
     Semicolon,
     Label,
-    // Operators
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Eq,
-    Match,
-    /// `|`
-    Pipe,
-    /// `_`
-    Underscore,
     If,
     Then,
     Else,
     True,
     False,
+    // Operators
+    /// `+`
+    Plus,
+    /// `-`
+    Minus,
+    /// `*`
+    Star,
+    /// `/`
+    Slash,
+    /// `=`
+    Eq,
+    /// `!=`
+    NEq,
+    /// `&&`
+    And,
+    /// `||`
+    Or,
+    Match,
+    /// `|`
+    Pipe,
+    /// `_`
+    Underscore,
 }
 
 // Some helpers
@@ -280,6 +295,7 @@ pub fn token<'a>() -> Parser<'a, Token, EofFail> {
                 symbol(":", Token::Colon).or_fail(()),
                 symbol("=>", Token::FatArrow).or_fail(()),
                 symbol("=", Token::Eq).or_fail(()),
+                symbol("!=", Token::NEq).or_fail(()),
                 symbol(",", Token::Comma).or_fail(()),
                 symbol("+", Token::Plus).or_fail(()),
                 symbol("-", Token::Minus).or_fail(()),
@@ -289,6 +305,8 @@ pub fn token<'a>() -> Parser<'a, Token, EofFail> {
                 symbol(")", Token::RParen).or_fail(()),
                 symbol("{", Token::LCurly).or_fail(()),
                 symbol("}", Token::RCurly).or_fail(()),
+                symbol("||", Token::Or).or_fail(()),
+                symbol("&&", Token::And).or_fail(()),
                 symbol("|", Token::Pipe).or_fail(()),
                 identifier_or_keyword().or_fail(()),
                 number().or_fail(()),

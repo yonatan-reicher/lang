@@ -290,11 +290,17 @@ impl Expr {
             },
             // Comparison
             Eq => Ok(Value::Bool(lhs == rhs()?)),
+            NEq => Ok(Value::Bool(lhs != rhs()?)),
             // Logical
             And => match lhs {
                 Value::Bool(true) => rhs(),
-                Value::Bool(false) => Ok(Value::Bool(false)),
+                Value::Bool(false) => Ok(false.into()),
                 _ => Err(BinOpError::And { lhs: lhs.clone() }.into()),
+            },
+            Or => match lhs {
+                Value::Bool(false) => rhs(),
+                Value::Bool(true) => Ok(true.into()),
+                _ => Err(BinOpError::Or { lhs: lhs.clone() }.into()),
             },
         }
     }

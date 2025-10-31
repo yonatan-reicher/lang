@@ -88,6 +88,10 @@ pub enum BinOp {
     Div,
     #[display("=")]
     Eq,
+    #[display("!=")]
+    NEq,
     #[display("&&")]
     And,
+    #[display("||")]
+    Or,
 }
