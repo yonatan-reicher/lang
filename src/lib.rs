@@ -1,5 +1,11 @@
 //! Provides functionality to parse and run code in a simple, interpreted PL.
 
+/// Define the tokens of the language
+mod token;
+pub use token::*;
+
+mod char_reader;
+
 /// Defines the Abstract Syntax Tree.
 pub mod ast;
 pub mod labeled;
