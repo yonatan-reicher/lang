@@ -55,7 +55,7 @@ string_enum! {
     /// On naming the cases: Each case is named after the symbol. They are not named after the
     /// operation (e.g., "Plus" instead of "Add"). The capitalization is based on the name of the
     /// symbol as it appears in American English. Example, people right "Semicolon" instead of
-    /// "Semi-Colon".
+    /// "Semi-Colon". Also, "L" is short for left, "R" for right.
     pub enum Symbol {
         // Note: Two-character symbols must come before their one-character prefix.
         FatArrow = "=>",
@@ -68,12 +68,12 @@ string_enum! {
         Caret = "^",
         Ampersand = "&",
         Star = "*",
-        LeftParen = "(",
-        RightParen = ")",
+        LParen = "(",
+        RParen = ")",
         Underscore = "_",
         Plus = "+",
-        LeftCurly = "{",
-        RightCurly = "}",
+        LCurly = "{",
+        RCurly = "}",
         Pipe = "|",
         Colon = ":",
         Quote = "\"",
@@ -83,8 +83,8 @@ string_enum! {
         Backtick = "`",
         Minus = "-",
         Equal = "=",
-        LeftBracket = "[",
-        RightBracket = "]",
+        LBracket = "[",
+        RBracket = "]",
         Backslash = "\\",
         Semicolon = ";",
         SingleQuote = "'",
