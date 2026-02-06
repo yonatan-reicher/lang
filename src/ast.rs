@@ -13,6 +13,7 @@ pub struct Program {
 pub struct ModuleDecl {
     pub name: String,
     // TODO: Rename to exporting?
+    // TODO: Why not `Vec<Rc<str>>`?
     pub exports: Vec<String>,
 }
 

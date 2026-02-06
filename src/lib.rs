@@ -1,17 +1,22 @@
 //! Provides functionality to parse and run code in a simple, interpreted PL.
 
+mod position;
 /// Define the tokens of the language
 mod token;
-pub use token::*;
-
 mod char_reader;
+/// Define the lexer.
+mod lex2;
+mod parse2;
+
+pub use lex2::lex;
+pub use token::*;
+pub use position::Position;
 
 /// Defines the Abstract Syntax Tree.
 pub mod ast;
 pub mod labeled;
 pub mod value;
 pub mod value_ref;
-pub mod position;
 pub mod lex;
 pub mod parse;
 /// Defines the context of the interpreter while it is running.

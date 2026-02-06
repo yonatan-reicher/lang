@@ -1,3 +1,4 @@
+use crate::position::Position as Pos;
 use derive_more::{Display, From};
 use std::rc::Rc;
 
@@ -32,6 +33,12 @@ macro_rules! string_enum {
                 }
             }
         }
+
+        impl $name {
+            pub const ALL: &'static [Self] = &[
+                $( Self::$case, )+
+            ];
+        }
     };
 }
 
@@ -48,6 +55,8 @@ string_enum! {
         True = "true",
         False = "false",
         Match = "match",
+        // TODO: Remove
+        Print = "print",
     }
 }
 
@@ -76,7 +85,7 @@ string_enum! {
         RCurly = "}",
         Pipe = "|",
         Colon = ":",
-        Quote = "\"",
+        // Quote = "\"",
         Less = "<",
         Greater = ">",
         QuestionMark = "?",
@@ -110,24 +119,6 @@ pub enum TokenKind {
     Sym(Symbol),
 }
 
-#[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
-#[display("[{line}:{col}]")]
-pub struct Pos {
-    pub offset: usize,
-    pub line: u16,
-    pub col: u16,
-}
-
-impl Default for Pos {
-    fn default() -> Self {
-        Pos {
-            offset: 0,
-            line: 1,
-            col: 1,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, Eq, From, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -141,6 +132,15 @@ impl AsRef<TokenKind> for Token {
     }
 }
 
+impl<T> PartialEq<T> for Token
+where
+    TokenKind: PartialEq<T>,
+{
+    fn eq(&self, other: &T) -> bool {
+        &self.kind == other
+    }
+}
+
 impl From<Keyword> for TokenKind {
     fn from(value: Keyword) -> Self {
         TokenKind::Kw(value)
@@ -150,6 +150,18 @@ impl From<Keyword> for TokenKind {
 impl From<Symbol> for TokenKind {
     fn from(value: Symbol) -> Self {
         TokenKind::Sym(value)
+    }
+}
+
+impl PartialEq<Keyword> for TokenKind {
+    fn eq(&self, other: &Keyword) -> bool {
+        self == &TokenKind::Kw(*other)
+    }
+}
+
+impl PartialEq<Symbol> for TokenKind {
+    fn eq(&self, other: &Symbol) -> bool {
+        self == &TokenKind::Sym(*other)
     }
 }
 
