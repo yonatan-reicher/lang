@@ -1,5 +1,7 @@
 //! This module is responsible for parsing tokens into an Abstract Syntax Tree (AST)!
 
+use functionality::Pipe;
+
 use crate::ast::*;
 use crate::lex2::Lexer;
 use crate::token::*;
@@ -7,7 +9,7 @@ use std::io::Result;
 use std::rc::Rc;
 
 #[derive(Debug)]
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Lexer<'a>,
 }
 
@@ -50,17 +52,41 @@ impl<'a> Parser<'a> {
             None
         })
     }
+
+    /// Pop an identifier, only if it is followed by some specific token.
+    fn pop_id_followed_by<T>(&mut self, after: T) -> Result<Option<Rc<str>>>
+    where
+        Token: PartialEq<T>,
+    {
+        // Works by using the push-back mechanism which let's us restore a single token backwards.
+        let id_token = self.peek()?;
+        let Some(id) = self.pop_id()? else {
+            return Ok(None);
+        };
+        if !self.pop_eq(after)? {
+            self.lexer.push_back(id_token);
+            return Ok(None);
+        }
+        Ok(Some(id))
+    }
 }
 
-macro_rules! only_if_pop_eq {
-    ($self:ident, $token:expr) => {
+macro_rules! only_if {
+    ($self:ident.pop_eq($token:expr)) => {
         if !$self.pop_eq($token)? {
             return Ok(None);
         }
     };
+    ($p:pat = $e:expr) => {
+        let Some($p) = $e? else {
+            return Ok(None);
+        };
+    };
 }
 
-macro_rules! any {
+/// `one_of![a, b, c]` returns the first expression which evaluates to `Ok(Some(..))`, or that
+/// returns some `Err(..)`.
+macro_rules! one_of {
     ($e:expr $(,)?) => {
         $e?
     };
@@ -68,7 +94,7 @@ macro_rules! any {
         if let Some(v) = $e1? {
             Some(v)
         } else {
-            any!($($e),*)
+            one_of!($($e),*)
         }
     };
 }
@@ -83,17 +109,22 @@ struct Block {
 
 impl<'a> Parser<'a> {
     pub fn program(&mut self) -> Result<Program> {
+        let module_decl = self.module_decl()?;
+        let block = self.block()?;
+        if !self.pop_eq(TokenKind::Eof)? {
+            todo!()
+        }
         Ok(Program {
-            module_decl: self.module_decl()?,
-            statements: vec![],
-            return_expr: None,
+            module_decl,
+            statements: block.statements,
+            return_expr: block.return_expr,
         })
     }
 
     // --- Module declaration ---
 
     fn module_decl(&mut self) -> Result<Option<ModuleDecl>> {
-        only_if_pop_eq!(self, Keyword::Module);
+        only_if!(self.pop_eq(Keyword::Module));
         let Some(name) = self.pop_id()? else {
             todo!();
         };
@@ -109,7 +140,7 @@ impl<'a> Parser<'a> {
     }
 
     fn exporting(&mut self) -> Result<Option<Vec<Rc<str>>>> {
-        only_if_pop_eq!(self, Keyword::Exporting);
+        only_if!(self.pop_eq(Keyword::Exporting));
         if !self.pop_eq(Symbol::LParen)? {
             todo!()
         }
@@ -130,30 +161,36 @@ impl<'a> Parser<'a> {
             statements.push(s);
         }
         // May or may not have an expression at the end.
-        let return_expr = self.expr()?;
+        let return_expr = self.maybe_expr()?;
         Ok(Block {
             statements,
-            return_expr: Some(return_expr),
+            return_expr,
         })
     }
 
     fn statement(&mut self) -> Result<Option<Statement>> {
-        Ok(any![
+        let Some(s) = one_of![
             self.print_statement(),
             self.import_statement(),
             self.label_statement(),
             self.assignment_statement(),
-        ])
+        ] else {
+            return Ok(None);
+        };
+        if !self.pop_eq(Symbol::Semicolon)? {
+            todo!()
+        }
+        Ok(Some(s))
     }
 
     fn print_statement(&mut self) -> Result<Option<Statement>> {
-        only_if_pop_eq!(self, Keyword::Print);
+        only_if!(self.pop_eq(Keyword::Print));
         let expr = self.expr()?;
         Ok(Some(Statement::Print(expr)))
     }
 
     fn import_statement(&mut self) -> Result<Option<Statement>> {
-        only_if_pop_eq!(self, Keyword::Import);
+        only_if!(self.pop_eq(Keyword::Import));
         let Some(module_name) = self.pop_id()? else {
             todo!()
         };
@@ -165,7 +202,7 @@ impl<'a> Parser<'a> {
     }
 
     fn import_exposing(&mut self) -> Result<Option<Vec<Rc<str>>>> {
-        only_if_pop_eq!(self, Keyword::Exposing);
+        only_if!(self.pop_eq(Keyword::Exposing));
         if !self.pop_eq(Symbol::LParen)? {
             todo!()
         }
@@ -177,10 +214,8 @@ impl<'a> Parser<'a> {
     }
 
     fn label_statement(&mut self) -> Result<Option<Statement>> {
-        only_if_pop_eq!(self, Keyword::Label);
-        let Some(name) = self.pop_id()? else {
-            todo!()
-        };
+        only_if!(self.pop_eq(Keyword::Label));
+        let Some(name) = self.pop_id()? else { todo!() };
         let parameters = self.repeat(Self::pop_id)?;
         Ok(Some(Statement::Label {
             name: name.as_ref().into(),
@@ -192,13 +227,88 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment_statement(&mut self) -> Result<Option<Statement>> {
-        todo!()
+        only_if!(id = self.pop_id_followed_by(Symbol::Equal));
+        let rhs = self.expr()?;
+        Ok(Some(Statement::Assignment(id.to_string(), rhs)))
     }
 
     // --- Expressions ---
 
     fn expr(&mut self) -> Result<Expr> {
+        if let Some(e) = self.maybe_expr()? {
+            Ok(e)
+        } else {
+            todo!()
+        }
+    }
+
+    fn maybe_expr(&mut self) -> Result<Option<Expr>> {
+        Ok(one_of![
+            self.if_expr(),
+            self.match_expr(),
+            self.function_expr(),
+            self.binop_expr(),
+        ])
+    }
+
+    fn if_expr(&mut self) -> Result<Option<Expr>> {
+        only_if!(self.pop_eq(Keyword::If));
         todo!()
+    }
+
+    fn match_expr(&mut self) -> Result<Option<Expr>> {
+        only_if!(self.pop_eq(Keyword::Match));
+        todo!()
+    }
+
+    fn function_expr(&mut self) -> Result<Option<Expr>> {
+        only_if!(param_id = self.pop_id_followed_by(Symbol::FatArrow));
+        let rhs = self.expr()?;
+        Ok(Some(Expr::Func(param_id.to_string(), Box::new(rhs))))
+    }
+
+    fn binop_expr(&mut self) -> Result<Option<Expr>> {
+        only_if!(lhs = self.application_expr());
+        Ok(Some(if let Some(op) = self.binop()? {
+            let Some(rhs) = self.binop_expr()? else {
+                todo!()
+            };
+            Expr::BinOp(Box::new(lhs), op, Box::new(rhs))
+        } else {
+            lhs
+        }))
+    }
+
+    fn binop(&mut self) -> Result<Option<BinOp>> {
+        let t = self.peek()?.kind;
+        let ret = Self::BINOPS
+            .iter()
+            .find(|(t2, _)| *t2 == t)
+            .map(|(_, op)| *op);
+        if ret.is_some() {
+            self.pop()?;
+        }
+        Ok(ret)
+    }
+
+    const BINOPS: &'static [(TokenKind, BinOp)] = &[
+        (TokenKind::Sym(Symbol::Plus), BinOp::Add),
+        (TokenKind::Sym(Symbol::Minus), BinOp::Sub),
+        (TokenKind::Sym(Symbol::Star), BinOp::Mul),
+        (TokenKind::Sym(Symbol::Slash), BinOp::Div),
+        (TokenKind::Sym(Symbol::Equal), BinOp::Eq),
+        (TokenKind::Sym(Symbol::BangEqual), BinOp::NEq),
+        (TokenKind::Kw(Keyword::And), BinOp::And),
+        (TokenKind::Kw(Keyword::Or), BinOp::Or),
+    ];
+
+    fn application_expr(&mut self) -> Result<Option<Expr>> {
+        let mut atoms = self.repeat(Self::atom)?;
+        Ok(match atoms.len() {
+            0 => None,
+            1 => Some(atoms.pop().unwrap()),
+            _ => Some(Expr::App(atoms)),
+        })
     }
 
     fn atom(&mut self) -> Result<Option<Expr>> {
@@ -220,6 +330,14 @@ impl<'a> Parser<'a> {
             TokenKind::Kw(k @ Keyword::True | k @ Keyword::False) => {
                 self.pop()?;
                 Some(Expr::Bool(k == Keyword::True))
+            }
+            TokenKind::Sym(Symbol::LParen) => {
+                self.pop()?;
+                let inside = self.expr()?;
+                if !self.pop_eq(Symbol::RParen)? {
+                    todo!()
+                }
+                Some(inside)
             }
             TokenKind::Kw(_) => None,
             TokenKind::Sym(_) => None,
