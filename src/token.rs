@@ -57,6 +57,8 @@ string_enum! {
         Match = "match",
         // TODO: Remove
         Print = "print",
+        And = "and",
+        Or = "or",
     }
 }
 
@@ -68,6 +70,7 @@ string_enum! {
     pub enum Symbol {
         // Note: Two-character symbols must come before their one-character prefix.
         FatArrow = "=>",
+        BangEqual = "!=",
         Tilda = "~",
         Bang = "!",
         At = "@",
