@@ -8,6 +8,8 @@ use std::io::Result;
 pub struct Lexer<'a> {
     chars: CharReader<'a>,
     next: Option<Token>,
+    /// Another token that let's us do look-back based on some pushed token.
+    pushed_back: Option<Token>,
 }
 
 impl<'a> Lexer<'a> {
@@ -15,9 +17,14 @@ impl<'a> Lexer<'a> {
         Self {
             chars: char_reader,
             next: None,
+            pushed_back: None,
         }
     }
+
     pub fn peek(&mut self) -> Result<Token> {
+        if let Some(t) = self.pushed_back.clone() {
+            return Ok(t);
+        }
         if self.next.is_none() {
             self.next = Some(lex_single(&mut self.chars)?);
         }
@@ -25,11 +32,18 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn pop(&mut self) -> Result<Token> {
-        if let Some(token) = self.next.take() {
+        if let Some(token) = self.pushed_back.take() {
+            Ok(token)
+        } else if let Some(token) = self.next.take() {
             Ok(token)
         } else {
             lex_single(&mut self.chars)
         }
+    }
+
+    pub fn push_back(&mut self, t: Token) {
+        assert!(self.pushed_back.is_none());
+        self.pushed_back = Some(t);
     }
 }
 
