@@ -7,7 +7,8 @@ use std::io::Result;
 use std::rc::Rc;
 
 pub fn parse<'a, T>(source: T) -> Result<Program>
-where Parser<'a>: From<T>
+where
+    Parser<'a>: From<T>,
 {
     let mut p = Parser::from(source);
     p.program()
@@ -73,6 +74,23 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         Ok(Some(id))
+    }
+
+    /// Pop an identifier, only if it is followed by some specific token.
+    fn pop_id_then<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<Option<T>>,
+    ) -> Result<Option<(Rc<str>, T)>> {
+        // Works by using the push-back mechanism which let's us restore a single token backwards.
+        let id_token = self.peek()?;
+        let Some(id) = self.pop_id()? else {
+            return Ok(None);
+        };
+        let Some(ret) = f(self)? else {
+            self.lexer.push_back(id_token);
+            return Ok(None);
+        };
+        Ok(Some((id, ret)))
     }
 }
 
@@ -258,12 +276,33 @@ impl<'a> Parser<'a> {
 
     fn if_expr(&mut self) -> Result<Option<Expr>> {
         only_if!(self.pop_eq(Keyword::If));
-        todo!()
+        let cond = self.expr()?;
+        if !self.pop_eq(Keyword::Then)? {
+            todo!()
+        }
+        let x = self.expr()?;
+        if !self.pop_eq(Keyword::Else)? {
+            todo!()
+        }
+        let y = self.expr()?;
+        Ok(Some(Expr::If(Box::new((cond, x, y)))))
     }
 
     fn match_expr(&mut self) -> Result<Option<Expr>> {
         only_if!(self.pop_eq(Keyword::Match));
-        todo!()
+        let input = self.expr()?;
+        let arms = self.repeat(Self::match_arm)?;
+        Ok(Some(Expr::Match(Box::new(input), arms)))
+    }
+
+    fn match_arm(&mut self) -> Result<Option<MatchArm>> {
+        only_if!(self.pop_eq(Symbol::Pipe));
+        let p = self.pattern()?;
+        if !self.pop_eq(Symbol::FatArrow)? {
+            todo!()
+        }
+        let e = self.expr()?;
+        Ok(Some(MatchArm(p, e)))
     }
 
     fn function_expr(&mut self) -> Result<Option<Expr>> {
@@ -338,16 +377,81 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Sym(Symbol::LParen) => {
                 self.pop()?;
-                let inside = self.expr()?;
+                let inside = self.block()?;
                 if !self.pop_eq(Symbol::RParen)? {
                     todo!()
                 }
-                Some(inside)
+                Some(match (inside.statements.is_empty(), inside.return_expr) {
+                    (true, Some(e)) => e,
+                    (false, Some(e)) => Expr::Statements(inside.statements, Box::new(e)),
+                    (_, None) => todo!(),
+                })
             }
             TokenKind::Kw(_) => None,
             TokenKind::Sym(_) => None,
         })
     }
+
+    // --- Pattern ---
+
+    fn pattern(&mut self) -> Result<Pattern> {
+        Ok(if let Some(p) = self.maybe_pattern()? {
+            p
+        } else {
+            todo!()
+        })
+    }
+
+    fn maybe_pattern(&mut self) -> Result<Option<Pattern>> {
+        Ok(one_of![self.applied_label_pattern(), self.pattern_atom()])
+    }
+
+    fn applied_label_pattern(&mut self) -> Result<Option<Pattern>> {
+        only_if!((label_id, param_1) = self.pop_id_then(Self::pattern_atom));
+        let mut rest = self.repeat(Self::pattern_atom)?;
+        rest.insert(0, param_1);
+        Ok(Some(Pattern::Label {
+            name: label_id.to_string(),
+            parameter_patterns: rest,
+        }))
+    }
+
+    fn pattern_atom(&mut self) -> Result<Option<Pattern>> {
+        Ok(one_of![
+            self.wildcard_pattern(),
+            self.parenthisized_pattern(),
+            self.id_pattern(),
+        ])
+    }
+
+    fn wildcard_pattern(&mut self) -> Result<Option<Pattern>> {
+        only_if!(self.pop_eq(Symbol::Underscore));
+        Ok(Some(Pattern::Wildcard))
+    }
+
+    fn parenthisized_pattern(&mut self) -> Result<Option<Pattern>> {
+        only_if!(self.pop_eq(Symbol::LParen));
+        let inside = self.pattern()?;
+        if !self.pop_eq(Symbol::RParen)? {
+            todo!()
+        }
+        Ok(Some(inside))
+    }
+
+    fn id_pattern(&mut self) -> Result<Option<Pattern>> {
+        only_if!(id = self.pop_id());
+        let is_label = id.chars().next().is_some_and(char::is_uppercase);
+        Ok(Some(if is_label {
+            Pattern::Label {
+                name: id.to_string(),
+                parameter_patterns: vec![],
+            }
+        } else {
+            Pattern::Var(id.to_string())
+        }))
+    }
+
+    // --- Other ---
 
     fn repeat<T>(&mut self, item: impl Fn(&mut Self) -> Result<Option<T>>) -> Result<Vec<T>> {
         let mut ret = vec![];
