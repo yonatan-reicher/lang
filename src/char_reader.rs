@@ -148,7 +148,7 @@ mod tests {
         let str = "a".repeat(BUFFER_SIZE * 2 + 10);
         let mut reader = CharReader::from(str.as_bytes());
         for i in 0..(BUFFER_SIZE * 2 + 10) {
-            println!("Reading char {}", i);
+            println!("Reading char {i}");
             assert_eq!(reader.pop().unwrap(), Some('a'));
         }
         println!("Reading EOF");
@@ -273,7 +273,7 @@ mod tests {
         ] {
             let pos = reader.pos();
             let c = reader.pop().unwrap().unwrap();
-            println!("Read char {:?} at pos {:?}", c, pos);
+            println!("Read char {c:?} at pos {pos:?}");
             assert_eq!(pos, expected_pos);
             assert_eq!(c, to_read.pop().unwrap());
         }

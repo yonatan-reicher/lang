@@ -1,408 +1,290 @@
-//! This module is responsible for parsing from source code to tokens.
+//! This module is responsible for lexing (tokenizing) source code into tokens.
 
-use std::rc::Rc;
+use crate::char_reader::CharReader;
+use crate::token::*;
+use std::io::Result;
 
-// use libraries
-use derive_more::From;
-use nessie_parse::{CombineFail, State, one_of};
-use thiserror::Error;
-
-use crate::position::Position;
-
-// This parser is built on top of Nessie Parse. Parsers can either return, fail,
-// or error. The difference between failure and error is that failures are
-// supposed to be recovered from.
-//
-// This parser only fails on the top level (because tokens are very flexible
-// syntactically). The failures are in a tree hierarchy and document when a case
-// does not apply.
-
-/// The parser type we use.
-type Parser<'a, T, F, E = Error> = nessie_parse::Parser<'a, T, E, F>;
-
-#[derive(Clone, Debug, From, PartialEq, Eq)]
-pub enum Token {
-    Ident(Rc<String>),
-    #[from]
-    Number(i64),
-    #[from]
-    String(Rc<str>),
-    /// `:`
-    Colon,
-    /// `,`
-    Comma,
-    Exporting,
-    Exposing,
-    /// `=>`
-    FatArrow,
-    Import,
-    /// `{`
-    LCurly,
-    /// `(`
-    LParen,
-    Module,
-    Print,
-    /// `}`
-    RCurly,
-    /// `)`
-    RParen,
-    /// `;`
-    Semicolon,
-    Label,
-    If,
-    Then,
-    Else,
-    True,
-    False,
-    // Operators
-    /// `+`
-    Plus,
-    /// `-`
-    Minus,
-    /// `*`
-    Star,
-    /// `/`
-    Slash,
-    /// `=`
-    Eq,
-    /// `!=`
-    NEq,
-    /// `&&`
-    And,
-    /// `||`
-    Or,
-    Match,
-    /// `|`
-    Pipe,
-    /// `_`
-    Underscore,
+#[derive(derive_more::Debug)]
+pub struct Lexer<'a> {
+    chars: CharReader<'a>,
+    next: Option<Token>,
+    /// Another token that let's us do look-back based on some pushed token.
+    pushed_back: Option<Token>,
 }
 
-// Some helpers
+impl<'a> Lexer<'a> {
+    pub const fn new(char_reader: CharReader<'a>) -> Self {
+        Self {
+            chars: char_reader,
+            next: None,
+            pushed_back: None,
+        }
+    }
 
-macro_rules! derive_all {
-    ( - Default /* Should be an item */ $($token:tt)* ) => {
-        #[derive(Clone, Debug, Error, From, PartialEq, Eq)]
-        $($token)*
+    pub fn peek(&mut self) -> Result<Token> {
+        if let Some(t) = self.pushed_back.clone() {
+            return Ok(t);
+        }
+        if self.next.is_none() {
+            self.next = Some(lex_single(&mut self.chars)?);
+        }
+        Ok(self.next.clone().unwrap())
+    }
+
+    pub fn pop(&mut self) -> Result<Token> {
+        if let Some(token) = self.pushed_back.take() {
+            Ok(token)
+        } else if let Some(token) = self.next.take() {
+            Ok(token)
+        } else {
+            lex_single(&mut self.chars)
+        }
+    }
+
+    pub fn push_back(&mut self, t: Token) {
+        assert!(self.pushed_back.is_none());
+        self.pushed_back = Some(t);
+    }
+}
+
+impl<'a, T: Into<CharReader<'a>>> From<T> for Lexer<'a> {
+    fn from(x: T) -> Self {
+        Self::new(x.into())
+    }
+}
+
+pub fn lex(chars: &mut CharReader) -> Result<Vec<Token>> {
+    let mut ret = vec![];
+    loop {
+        let token = lex_single(chars)?;
+        let is_eof = matches!(token.kind, TokenKind::Eof);
+        ret.push(token);
+        if is_eof {
+            return Ok(ret);
+        }
+    }
+}
+
+pub fn lex_single(chars: &mut CharReader) -> Result<Token> {
+    skip_whitespace(chars)?;
+    let start = chars.pos();
+    let kind = match chars.peek()? {
+        None => TokenKind::Eof,
+        Some(c) if c.is_ascii_digit() => number(chars)?,
+        Some(c) if is_ident_start(c) => ident(chars)?,
+        Some('"') => string(chars)?,
+        Some(c) if is_symbol_start(c) => symbol(chars)?,
+        _ => {
+            chars.pop()?;
+            TokenKind::Err
+        }
     };
-    ( /* Should be an item */ $($token:tt)* ) => {
-        #[derive(Clone, Debug, Default, Error, From, PartialEq, Eq)]
-        $($token)*
+    let end = chars.pos();
+    Ok(Token { kind, start, end })
+}
+
+fn skip_whitespace(chars: &mut CharReader) -> Result<()> {
+    while chars.peek()?.is_some_and(char::is_whitespace) {
+        chars.pop()?;
+    }
+    Ok(())
+}
+
+fn number(chars: &mut CharReader) -> Result<TokenKind> {
+    let mut i = 0;
+    while chars.peek()?.is_some_and(|c| c.is_ascii_digit()) {
+        let c = chars.pop()?.unwrap();
+        i *= 10;
+        i += c as i64 - '0' as i64;
+    }
+    Ok(TokenKind::from(i))
+}
+
+fn is_ident_start(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '_'
+}
+
+fn is_ident(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_' || c == '-'
+}
+
+fn ident(chars: &mut CharReader) -> Result<TokenKind> {
+    let mut string = String::new();
+    while chars.peek()?.is_some_and(is_ident) {
+        string.push(chars.pop()?.unwrap());
+    }
+    if string == "_" {
+        return Ok(TokenKind::Sym(Symbol::Underscore));
+    }
+    if let Some(k) = Keyword::ALL
+        .iter()
+        .cloned()
+        .find(|k| string.as_str() == k.as_ref())
+    {
+        return Ok(k.into());
+    }
+    Ok(TokenKind::Id(string.into()))
+}
+
+fn is_symbol_start(c: char) -> bool {
+    Symbol::ALL.iter().any(|s| s.as_ref().starts_with(c))
+}
+
+fn symbol(chars: &mut CharReader) -> Result<TokenKind> {
+    // Look for some longest prefix of some symbols.
+    let mut prefix = String::new();
+    prefix.push(chars.pop()?.unwrap());
+    let symbol_str = loop {
+        prefix.push(chars.peek()?.unwrap());
+        if Symbol::ALL.iter().all(|s| !s.as_ref().starts_with(&prefix)) {
+            // We went too long!
+            prefix.pop();
+            break prefix;
+        }
+        chars.pop()?;
     };
+    Ok(Symbol::ALL
+        .iter()
+        .cloned()
+        .find(|s| s.as_ref() == symbol_str)
+        .expect("has to exist because string is longest prefix of Symbols")
+        .into())
 }
 
-fn vec_to_string(vec: Vec<char>) -> String {
-    vec.iter().cloned().collect()
-}
-
-fn default<T: Default>() -> T {
-    T::default()
-}
-
-fn position<'a, F: 'a, E: 'a>() -> Parser<'a, Position, F, E> {
-    Parser::state().map(|state| Position::new(state.text, state.pos.offset))
-}
-
-// The implementation
-
-derive_all![
-    #[error("does not begin with a digit")]
-    struct NoDigit;
-];
-
-fn number<'a, E: 'a>() -> Parser<'a, Token, NoDigit, E> {
-    Parser::digit()
-        .or_fail(NoDigit)
-        .repeat_1()
-        .map(vec_to_string)
-        .map(|s| s.parse::<i64>().unwrap().into())
-}
-
-derive_all![
-    #[error("does not begin with '\"'")]
-    pub struct NoQuote;
-];
-derive_all![
-    #[error("does begin not begin with a non-quote character")]
-    pub struct YesQuoteOrEof;
-];
-
-derive_all![ - Default
-    pub enum StringError {
-        #[error("string is missing a closing quote")]
-        NoClosingQuote,
+fn string(chars: &mut CharReader) -> Result<TokenKind> {
+    assert_eq!(chars.pop()?, Some('"'));
+    let mut s = String::new();
+    loop {
+        match chars.pop()? {
+            None => return Ok(TokenKind::Err),
+            Some('"') => break,
+            Some(c) => s.push(c),
+        }
     }
-];
-
-fn string<'a>() -> Parser<'a, Token, NoQuote, StringError> {
-    fn not_quote<'a, E: 'a>() -> Parser<'a, char, YesQuoteOrEof, E> {
-        Parser::char().or_fail(YesQuoteOrEof).filter(|c| *c != '"')
-    }
-
-    // Expect opening quote
-    Parser::char_eq('"').and_then(|_| {
-        // Some middle chars...
-        not_quote().repeat_0().and_then(|chars| {
-            let token = Token::String(vec_to_string(chars).into());
-            // Closing quote!
-            Parser::<_, (), _>::char_eq('"')
-                .map(move |_| token.clone())
-                .or_err(StringError::NoClosingQuote)
-        })
-    })
-}
-
-derive_all![
-    #[error("does not begin with a letter or an underscore")]
-    struct NoLetterOrUnderscore;
-];
-derive_all![
-    #[error("does not begin with a letter, an underscore, or a digit")]
-    struct NoLetterOrUnderscoreOrDigit;
-];
-derive_all![
-    #[error("{0}")]
-    struct NoIdentifier(NoLetterOrUnderscore);
-];
-
-fn identifier_or_keyword<'a, E: 'a>() -> Parser<'a, Token, NoIdentifier, E> {
-    fn start_char<'a, E: 'a>() -> Parser<'a, char, NoLetterOrUnderscore, E> {
-        Parser::char()
-            .or_fail(default())
-            .filter(|&c| c.is_alphabetic() || c == '_')
-    }
-
-    fn end_char<'a, E: 'a>() -> Parser<'a, char, NoLetterOrUnderscoreOrDigit, E> {
-        Parser::char()
-            .or_fail(default())
-            .filter(|&c| c.is_alphanumeric() || c == '_')
-    }
-
-    start_char()
-        .map_fail(Into::into)
-        .and_then(|start_char| {
-            end_char().repeat_0().map(move |end_chars| {
-                let mut identifier = String::new();
-                identifier.push(start_char);
-                identifier.extend(end_chars);
-                identifier
-            })
-        })
-        // Keywords should be added here!
-        .map(|ident| match ident.as_str() {
-            "exporting" => Token::Exporting,
-            "exposing" => Token::Exposing,
-            "import" => Token::Import,
-            "module" => Token::Module,
-            "print" => Token::Print,
-            "label" => Token::Label,
-            "match" => Token::Match,
-            "if" => Token::If,
-            "then" => Token::Then,
-            "else" => Token::Else,
-            "true" => Token::True,
-            "false" => Token::False,
-            _ => Token::Ident(ident.into()),
-        })
-}
-
-derive_all![ - Default
-    #[error("does not begin with symbol '{0}'")]
-    struct NoSymbol(&'static str);
-];
-
-fn symbol<'a, E: 'a>(s: &'static str, ret: Token) -> Parser<'a, Token, NoSymbol, E> {
-    Parser::expect_string(s)
-        .map(move |()| ret.clone())
-        .or_fail(NoSymbol(s))
-}
-
-derive_all![
-    #[error("no '//' or '/*'")]
-    struct NoCommentStart;
-];
-impl<'a> CombineFail<'a, NoCommentStart, NoCommentStart> for NoCommentStart {
-    fn combine_fail(
-        self,
-        _self_state: State<'a>,
-        _other: NoCommentStart,
-        _other_state: State<'a>,
-    ) -> NoCommentStart {
-        NoCommentStart
-    }
-}
-
-fn line_comment<'a>() -> Parser<'a, (), NoCommentStart> {
-    Parser::expect_string("//")
-        .or_fail(NoCommentStart)
-        .and_then(|()| Parser::char().filter(|c| *c != '\n').repeat_0().map(|_| ()))
-}
-
-fn inline_comment<'a>() -> Parser<'a, (), NoCommentStart> {
-    // TODO: Parse with depth
-    fn inner<'a, F: 'a>() -> Parser<'a, (), F> {
-        one_of![
-            Parser::expect_string("*/").or_fail(()),
-            inline_comment().or_fail(()),
-            Parser::char().or_fail(()).and_then(|_| inner())
-        ]
-        .and_then_fail(|()| Parser::err(todo!("unmatched '/*'")))
-    }
-    Parser::expect_string("/*")
-        .or_fail(NoCommentStart)
-        .and_then(|()| inner())
-}
-
-fn comment<'a>() -> Parser<'a, (), NoCommentStart> {
-    line_comment().or(inline_comment())
-}
-
-fn skip_things<'a, F: 'a>() -> Parser<'a, (), F> {
-    Parser::skip_whitespace().and_then(|()| comment().and_then(|()| skip_things()).or_ret(()))
-}
-
-#[derive(Clone, Debug, Error, From, PartialEq)]
-#[error("{position} {kind}")]
-pub struct Error {
-    position: Position,
-    kind: ErrorKind,
-}
-
-#[derive(Clone, Debug, Error, From, PartialEq)]
-pub enum ErrorKind {
-    #[error("unclosed quote ('\"')")]
-    #[from(StringError)]
-    UnclosedQuote,
-    #[error("could not understand this token")]
-    NonsenseToken,
-}
-
-derive_all![
-    #[error("unexpected end of input")]
-    pub struct EofFail;
-];
-
-/// Parse a token from the text!
-pub fn token<'a>() -> Parser<'a, Token, EofFail> {
-    skip_things() // This is where comments happen
-        .and_then(|()| Parser::eof().not::<EofFail>())
-        .and_then(|()| position())
-        .and_then(|position| {
-            one_of![
-                // Symbols should be added here
-                symbol("_", Token::Underscore).or_fail(()),
-                symbol(";", Token::Semicolon).or_fail(()),
-                symbol(":", Token::Colon).or_fail(()),
-                symbol("=>", Token::FatArrow).or_fail(()),
-                symbol("=", Token::Eq).or_fail(()),
-                symbol("!=", Token::NEq).or_fail(()),
-                symbol(",", Token::Comma).or_fail(()),
-                symbol("+", Token::Plus).or_fail(()),
-                symbol("-", Token::Minus).or_fail(()),
-                symbol("*", Token::Star).or_fail(()),
-                symbol("/", Token::Slash).or_fail(()),
-                symbol("(", Token::LParen).or_fail(()),
-                symbol(")", Token::RParen).or_fail(()),
-                symbol("{", Token::LCurly).or_fail(()),
-                symbol("}", Token::RCurly).or_fail(()),
-                symbol("||", Token::Or).or_fail(()),
-                symbol("&&", Token::And).or_fail(()),
-                symbol("|", Token::Pipe).or_fail(()),
-                identifier_or_keyword().or_fail(()),
-                number().or_fail(()),
-                string().or_fail(()).map_err(ErrorKind::from),
-            ]
-            .and_then_fail(|()| Parser::err(ErrorKind::NonsenseToken))
-            .map_err(move |kind| Error { position, kind })
-        })
-}
-
-pub fn token_eq<'a, F>(t: Token) -> Parser<'a, (), F>
-where
-    F: 'a + Clone + Default,
-{
-    token()
-        .or_fail(default())
-        .filter(move |t1| t1 == &t)
-        .map(|_| ())
-}
-
-pub fn token_ident<'a, F>() -> Parser<'a, Rc<String>, F>
-where
-    F: 'a + Clone + Default,
-{
-    token().or_fail(default()).and_then(|token| match token {
-        Token::Ident(ident) => Parser::ret(ident),
-        _ => Parser::fail(F::default()),
-    })
+    Ok(TokenKind::Str(s.into()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::char_reader::CharReader;
+    use crate::position::Position;
     use indoc::indoc;
-    use nessie_parse::{ParseResult, Pos};
+    use std::rc::Rc;
 
     #[test]
-    fn test_number_token() {
-        let res = token().parse(
-            indoc! {r"
-                1234
-            "}
-            .into(),
-        );
+    fn empty_source() {
+        let source = "";
+        let mut char_reader = CharReader::new(source.as_bytes());
         assert_eq!(
-            res,
-            ParseResult::Ok(
-                Token::Number(1234),
-                Pos {
-                    row: 1,
-                    col: 5,
-                    offset: 4
-                },
-            ),
+            lex_single(&mut char_reader).unwrap(),
+            Token {
+                kind: TokenKind::Eof,
+                start: Position::new(source, 0),
+                end: Position::new(source, 0),
+            }
         );
     }
 
     #[test]
-    fn token_left_paren() {
-        let res = token().parse(
-            indoc! {r"
-                (
-            "}
-            .into(),
-        );
+    fn number_token() {
+        let source = "  12345 ";
+        let mut char_reader = CharReader::new(source.as_bytes());
         assert_eq!(
-            res,
-            ParseResult::Ok(
-                Token::LParen,
-                Pos {
-                    offset: 1,
-                    row: 1,
-                    col: 2,
-                },
-            ),
+            lex_single(&mut char_reader).unwrap(),
+            Token {
+                kind: TokenKind::Num(12345),
+                start: Position::new(source, 2),
+                end: Position::new(source, 7),
+            }
         );
     }
 
     #[test]
-    fn token_string_literal() {
-        let res = token().parse(
-            indoc! {r#"
-                "hello world1'!"
-            "#}
-            .into(),
-        );
+    fn ident() {
+        let source = "   hello_world  ";
+        let mut char_reader = CharReader::from(source.as_bytes());
         assert_eq!(
-            res,
-            ParseResult::Ok(
-                Token::String("hello world1'!".into()),
-                Pos {
-                    offset: 16,
-                    row: 1,
-                    col: 17,
-                },
-            ),
+            lex_single(&mut char_reader).unwrap(),
+            Token {
+                kind: TokenKind::Id(Rc::from("hello_world")),
+                start: Position::new(source, 3),
+                end: Position::new(source, 14),
+            }
         );
+    }
+
+    #[test]
+    fn string_literal() {
+        let source = r#"   "hello, world!"  "#;
+        let mut char_reader = CharReader::from(source.as_bytes());
+        assert_eq!(
+            lex_single(&mut char_reader).unwrap(),
+            Token {
+                kind: TokenKind::Str(Rc::from("hello, world!")),
+                start: Position::new(source, 3),
+                end: Position::new(source, 18),
+            }
+        );
+    }
+
+    fn symbol_token(symbol: Symbol, source: &str, expected_end: usize) {
+        let mut char_reader = CharReader::from(source.as_bytes());
+        assert_eq!(
+            lex_single(&mut char_reader).unwrap(),
+            Token {
+                kind: TokenKind::Sym(symbol),
+                start: Position::new(source, 0),
+                end: Position::new(source, expected_end),
+            }
+        );
+    }
+
+    #[test]
+    fn test_symbols() {
+        for symbol in Symbol::ALL {
+            let source = format!("{}  ", symbol.as_ref());
+            symbol_token(*symbol, &source, symbol.as_ref().len());
+        }
+    }
+
+    #[test]
+    fn varied_tokens() {
+        let source = indoc! {r#"
+            import std exposing (Print)
+            x = 42;
+            Print(x)
+        "#};
+        let mut lexer = Lexer::from(source.as_bytes());
+        macro_rules! token {
+            ($kind:ident $( ( $( $arg:expr ),* ) )? , $start:expr, $end:expr) => {
+                Token {
+                    kind: TokenKind::$kind $( ( $($arg),* ) )?,
+                    start: Position::new(source, $start),
+                    end: Position::new(source, $end),
+                }
+            };
+        }
+        let expected_tokens = vec![
+            token!(Kw(Keyword::Import), 0, 6),
+            token!(Id(Rc::from("std")), 7, 10),
+            token!(Kw(Keyword::Exposing), 11, 19),
+            token!(Sym(Symbol::LParen), 20, 21),
+            token!(Id(Rc::from("Print")), 21, 26),
+            token!(Sym(Symbol::RParen), 26, 27),
+            token!(Id(Rc::from("x")), 28, 29),
+            token!(Sym(Symbol::Equal), 30, 31),
+            token!(Num(42), 32, 34),
+            token!(Sym(Symbol::Semicolon), 34, 35),
+            token!(Id(Rc::from("Print")), 36, 41),
+            token!(Sym(Symbol::LParen), 41, 42),
+            token!(Id(Rc::from("x")), 42, 43),
+            token!(Sym(Symbol::RParen), 43, 44),
+            token!(Eof, 45, 45),
+        ];
+        for expected_kind in expected_tokens {
+            let token = lexer.pop().unwrap();
+            assert_eq!(token, expected_kind);
+        }
     }
 }

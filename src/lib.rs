@@ -5,20 +5,14 @@ mod position;
 mod token;
 mod char_reader;
 /// Define the lexer.
-mod lex2;
-mod parse2;
-
-pub use lex2::lex;
-pub use token::*;
-pub use position::Position;
+mod lex;
+mod parse;
 
 /// Defines the Abstract Syntax Tree.
 pub mod ast;
 pub mod labeled;
 pub mod value;
 pub mod value_ref;
-pub mod lex;
-pub mod parse;
 /// Defines the context of the interpreter while it is running.
 pub mod context;
 pub mod stdlib;
@@ -33,6 +27,10 @@ pub mod repl;
 /// Executing Io operations represented as values.
 pub mod io_commands;
 
+pub use lex::lex;
+pub use token::*;
+pub use position::Position;
+
 /// This function returns a vector of values that were printed during execution.
 /// The RETURN VALUE of the program is IGNORED.
 pub fn execute_string<'text>(
@@ -45,7 +43,7 @@ pub fn execute_string<'text>(
         modules: [].into(),
     };
     context.add_stdlib();
-    let ast = parse::parse(source_code)?;
+    let ast = parse::parse(source_code.as_bytes())?;
     ast.execute(&mut context)?;
     let vec = std::mem::take(out.borrow_mut().as_mut());
     Ok(vec)

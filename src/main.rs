@@ -30,8 +30,8 @@ enum Error {
     Io(#[from] std::io::Error),
     #[error("{0}")]
     Type(#[from] lang::typing::Error),
-    #[error("{0}")]
-    Parse(#[from] lang::parse::Error),
+    // #[error("{0}")]
+    // Parse(#[from] lang::parse::Error),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -111,7 +111,7 @@ impl AsMut<Context> for ReplContext {
 }
 
 fn run_repl_line(line: &str, c: &mut ReplContext) -> Result<()> {
-    let program = parse(line)?;
+    let program = parse(line.as_bytes())?;
     let t = program.infer(&mut c.type_context)?;
     if let Some(t) = t {
         println!("{t}");
@@ -126,7 +126,7 @@ fn run_repl_line(line: &str, c: &mut ReplContext) -> Result<()> {
 fn run_text(text: &str) -> Result<()> {
     let mut context = Context::default();
     let stdlib = context.add_stdlib();
-    let program = parse(text)?;
+    let program = parse(text.as_bytes())?;
     let Some(ret) = program.execute(&mut context)? else {
         eprintln!("This program does not return a value");
         exit(0);
