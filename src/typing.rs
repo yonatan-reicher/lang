@@ -8,11 +8,15 @@ use thiserror::Error;
 pub enum Error {
     #[error("unknown variable")]
     UnknownVariable(Rc<str>),
+    #[error("no module '{name}'")]
+    NoModule { name : Rc<str> },
+    #[error("module '{module}' does not contain an item '{item}'")]
+    NoModuleItem { module: Rc<str>, item: Rc<str> },
 }
 
 type Result<T = Rc<Type>, E = Error> = std::result::Result<T, E>;
 
-#[derive(Clone, Debug, Display, PartialEq)]
+#[derive(Clone, Debug, Display, PartialEq, Eq)]
 pub enum Type {
     #[display("Bool")]
     Bool,
@@ -22,8 +26,14 @@ pub enum Type {
     Str,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Module {
+    items: HashMap<Rc<str>, Rc<Type>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Context {
+    modules: HashMap<Rc<str>, Module>,
     vars: HashMap<Rc<str>, Rc<Type>>,
 }
 
@@ -92,9 +102,19 @@ impl ast::Statement {
                 let expr_type = expr.infer(c)?;
                 c.add_var(name.as_str().into(), expr_type);
             }
-            ast::Statement::Print(expr) => (),
+            ast::Statement::Print(_) => (),
             ast::Statement::Import { module_name, imports } => {
-                todo!()
+                let module_name: Rc<str> = module_name.as_str().into();
+                let Some(module) = c.modules.get(&module_name) else {
+                    return Err(Error::NoModule { name: module_name });
+                };
+                for item_name in imports {
+                    let item_name: Rc<str> = item_name.as_str().into();
+                    let Some(t) = module.items.get(&item_name) else {
+                        return Err(Error::NoModuleItem { module: module_name, item: item_name });
+                    };
+                    c.vars.insert(item_name.clone(), t.clone());
+                }
             }
             ast::Statement::Label { name, parameters } => todo!(),
         }
