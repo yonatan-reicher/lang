@@ -18,7 +18,7 @@ pub enum Value {
     Unit,
     /// true, false
     #[from]
-    #[display("{_0}", )]
+    #[display("{_0}")]
     Bool(bool),
     /// 123
     #[from]
