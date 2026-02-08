@@ -27,7 +27,7 @@ pub enum Value {
     #[from(Rc<str>, &str, String)]
     #[display("\"{_0}\"")]
     Str(Rc<str>),
-    /// print, (x => x + 1)
+    /// abs, (x => x + 1)
     #[from(Rc<Func> /* `Func` handled by a different impl */)]
     Func(Rc<Func>),
     /// Hello x y     (here `Hello` is the label)
