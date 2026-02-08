@@ -14,7 +14,7 @@ pub enum Error {
     NoModuleItem { module: Rc<str>, item: Rc<str> },
 }
 
-type Result<T = Rc<Type>, E = Error> = std::result::Result<T, E>;
+type Result<T = Type, E = Error> = std::result::Result<T, E>;
 
 #[derive(Clone, Debug, Display, PartialEq, Eq)]
 pub enum Type {
@@ -28,13 +28,13 @@ pub enum Type {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Module {
-    items: HashMap<Rc<str>, Rc<Type>>,
+    items: HashMap<Rc<str>, Type>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Context {
     modules: HashMap<Rc<str>, Module>,
-    vars: HashMap<Rc<str>, Rc<Type>>,
+    vars: HashMap<Rc<str>, Type>,
 }
 
 impl Context {
@@ -42,7 +42,7 @@ impl Context {
         Default::default()
     }
 
-    pub fn add_var(&mut self, name: Rc<str>, t: Rc<Type>) -> Option<Rc<Type>> {
+    pub fn add_var(&mut self, name: Rc<str>, t: Type) -> Option<Type> {
         self.vars.insert(name, t)
     }
 }
@@ -58,12 +58,11 @@ impl Context {
 // }
 
 impl ast::Expr {
-    pub fn infer(&self, c: &mut Context) -> Result<Rc<Type>> {
+    pub fn infer(&self, c: &mut Context) -> Result {
         match self {
-            // TODO: Make these singletons?
-            ast::Expr::Bool(_) => Ok(Rc::new(Type::Bool)),
-            ast::Expr::Int(_) => Ok(Rc::new(Type::Int)),
-            ast::Expr::Str(_) => Ok(Rc::new(Type::Str)),
+            ast::Expr::Bool(_) => Ok(Type::Bool),
+            ast::Expr::Int(_) => Ok(Type::Int),
+            ast::Expr::Str(_) => Ok(Type::Str),
             ast::Expr::Var(s) => c
                 .vars
                 .get(s.as_str())
@@ -73,15 +72,15 @@ impl ast::Expr {
                 let lhs = lhs.infer(c)?;
                 let rhs = rhs.infer(c)?;
                 use ast::BinOp::*;
-                match (bin_op, lhs.as_ref(), rhs.as_ref()) {
+                match (bin_op, lhs, rhs) {
                     // int
-                    (Add | Sub | Mul | Div, Type::Int, Type::Int) => Ok(lhs.clone()),
+                    (Add | Sub | Mul | Div, Type::Int, Type::Int) => Ok(Type::Int),
                     // str
-                    (Add, Type::Str, Type::Str) => Ok(lhs.clone()),
+                    (Add, Type::Str, Type::Str) => Ok(Type::Str),
                     // eq
-                    (Eq | NEq, a, b) if a == b => Ok(Type::Bool.into()),
+                    (Eq | NEq, a, b) if a == b => Ok(Type::Bool),
                     // bool
-                    (And | Or, Type::Bool, Type::Bool) => Ok(Rc::new(Type::Bool)),
+                    (And | Or, Type::Bool, Type::Bool) => Ok(Type::Bool),
                     // error
                     _ => todo!("bad op typing"),
                 }
@@ -123,7 +122,7 @@ impl ast::Statement {
 }
 
 impl ast::Program {
-    pub fn infer(&self, c: &mut Context) -> Result<Option<Rc<Type>>> {
+    pub fn infer(&self, c: &mut Context) -> Result<Option<Type>> {
         // TODO: Maybe we need to use the `module_decl` field in some way?
         for s in &self.statements {
             s.infer(c)?;
@@ -147,9 +146,9 @@ mod tests {
             Box::new(Int(64)),
         );
         let mut c = Context::new().mutate(|c| {
-            c.add_var("x".into(), Rc::new(Type::Int));
+            c.add_var("x".into(), Type::Int);
         });
         let t = e.infer(&mut c).expect("should not err");
-        assert_eq!(*t.as_ref(), Type::Int);
+        assert_eq!(t, Type::Int);
     }
 }
