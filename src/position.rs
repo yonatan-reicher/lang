@@ -4,7 +4,6 @@ use derive_more::{Debug, Display};
 #[debug("Position(line={line}, column={column}, offset={offset})")]
 #[display("[{}:{}]", self.line, self.column)]
 pub struct Position {
-    // TODO: Maybe use nessie_parse::Pos instead?
     pub line: usize,
     pub column: usize,
     pub offset: usize,
