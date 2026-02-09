@@ -30,6 +30,8 @@ pub enum Type {
     Int,
     #[display("Str")]
     Str,
+    #[display("({} -> {})", _0.0, _0.1)]
+    Func(Rc<(Type, Type)>),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -160,5 +162,11 @@ mod tests {
         });
         let t = e.infer(&mut c).expect("should not err");
         assert_eq!(t, Type::Int);
+    }
+
+    #[test]
+    fn func_to_string() {
+        let t = Type::Func(Rc::new((Type::Str, Type::Int)));
+        assert_eq!(t.to_string(), "(Str -> Int)");
     }
 }
