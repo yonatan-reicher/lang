@@ -131,7 +131,7 @@ impl Stdlib {
                 let arg = values.first().unwrap();
                 match arg {
                     Value::Bool(b) => Ok(Value::Bool(!b)),
-                    _ => Err(todo!()),
+                    _ => todo!(),
                 }
             }),
         }.pipe(Func::from).pipe(Rc::new);
