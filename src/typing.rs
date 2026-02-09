@@ -52,7 +52,7 @@ impl Context {
 //         vars: HashMap<String, Value>,
 //         modules: HashMap<String, Module>,
 //         out: PrintOutput,
-//         c.vars.insert(name, 
+//         c.vars.insert(name,
 //         todo!()
 //     }
 // }
