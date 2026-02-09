@@ -97,11 +97,77 @@ impl ast::Expr {
                     }),
                 }
             }
-            ast::Expr::Func(_, expr) => todo!(),
-            ast::Expr::App(exprs) => todo!(),
-            ast::Expr::Match(expr, match_arms) => todo!(),
-            ast::Expr::Statements(statements, expr) => todo!(),
-            ast::Expr::If(_) => todo!(),
+            ast::Expr::Func(param, expr) => {
+                let t = Type::Int; // TODO
+                let param: Rc<str> = param.as_str().into();
+                let old = c.vars.insert(param.clone(), t.clone());
+                let rhs = expr.infer(c)?;
+                match old {
+                    Some(old) => {
+                        c.vars.insert(param, old);
+                    }
+                    None => {
+                        c.vars.remove(&param);
+                    }
+                }
+                Ok(Type::Func(Rc::new((t, rhs))))
+            }
+            ast::Expr::App(exprs) => {
+                assert!(exprs.len() >= 2);
+                let types = exprs
+                    .iter()
+                    .map(|a| a.infer(c))
+                    .collect::<Result<Vec<_>>>()?;
+                let mut lhs_type = &types[0];
+                let arg_types = &types[1..];
+                for arg_type in arg_types {
+                    let Type::Func(f) = lhs_type else { todo!() };
+                    let (param_type, rhs_type) = f.as_ref();
+                    if param_type != arg_type {
+                        todo!()
+                    }
+                    lhs_type = rhs_type
+                }
+                Ok(lhs_type.clone())
+            }
+            ast::Expr::Match(input, arms) => {
+                let input_type = input.infer(c)?;
+                let mut ret = None;
+                for ast::MatchArm(p, e) in arms {
+                    let vars = p.infer(&input_type)?;
+                    let c = &mut c.clone();
+                    for (v, t) in vars {
+                        c.vars.insert(v, t);
+                    }
+                    let t = e.infer(c)?;
+                    match &ret {
+                        None => ret = Some(t),
+                        Some(ret) if t == *ret => (),
+                        Some(_) => todo!(),
+                    }
+                }
+                Ok(ret.unwrap())
+            }
+            ast::Expr::Statements(statements, expr) => {
+                let c = &mut c.clone();
+                for s in statements {
+                    s.infer(c)?
+                }
+                expr.infer(c)
+            }
+            ast::Expr::If(e) => {
+                let (cond, x, y) = e.as_ref();
+                let cond_type = cond.infer(c)?;
+                if cond_type != Type::Bool {
+                    todo!()
+                }
+                let x_type = x.infer(c)?;
+                let y_type = y.infer(c)?;
+                if x_type != y_type {
+                    todo!()
+                }
+                Ok(x_type)
+            }
         }
     }
 }
@@ -114,7 +180,10 @@ impl ast::Statement {
                 c.add_var(name.as_str().into(), expr_type);
             }
             ast::Statement::Print(_) => (),
-            ast::Statement::Import { module_name, imports } => {
+            ast::Statement::Import {
+                module_name,
+                imports,
+            } => {
                 let module_name: Rc<str> = module_name.as_str().into();
                 let Some(module) = c.modules.get(&module_name) else {
                     return Err(Error::NoModule { name: module_name });
@@ -122,14 +191,27 @@ impl ast::Statement {
                 for item_name in imports {
                     let item_name: Rc<str> = item_name.as_str().into();
                     let Some(t) = module.items.get(&item_name) else {
-                        return Err(Error::NoModuleItem { module: module_name, item: item_name });
+                        return Err(Error::NoModuleItem {
+                            module: module_name,
+                            item: item_name,
+                        });
                     };
                     c.vars.insert(item_name.clone(), t.clone());
                 }
             }
-            ast::Statement::Label { name, parameters } => todo!(),
+            ast::Statement::Label { .. } => todo!(),
         }
         Ok(())
+    }
+}
+
+impl ast::Pattern {
+    pub fn infer(&self, input: &Type) -> Result<Vec<(Rc<str>, Type)>> {
+        Ok(match self {
+            ast::Pattern::Var(id) => vec![(Rc::from(id.as_str()), input.clone())],
+            ast::Pattern::Wildcard => vec![],
+            ast::Pattern::Label { .. } => todo!(),
+        })
     }
 }
 
