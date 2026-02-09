@@ -9,7 +9,7 @@ pub enum Error {
     #[error("unknown variable")]
     UnknownVariable(Rc<str>),
     #[error("no module '{name}'")]
-    NoModule { name : Rc<str> },
+    NoModule { name: Rc<str> },
     #[error("module '{module}' does not contain an item '{item}'")]
     NoModuleItem { module: Rc<str>, item: Rc<str> },
 }
