@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
         let exporting = self.exporting()?;
         Ok(Some(ModuleDecl {
             name: name.as_ref().into(),
-            exports: exporting
+            exporting: exporting
                 .unwrap_or_default()
                 .iter()
                 .map(|id| id.as_ref().into())
@@ -219,8 +219,8 @@ impl<'a> Parser<'a> {
         };
         let exposing = self.import_exposing()?.unwrap_or_default();
         Ok(Some(Statement::Import {
-            module_name: module_name.to_string(),
-            imports: exposing.into_iter().map(|id| id.to_string()).collect(),
+            module_name,
+            exposing,
         }))
     }
 
@@ -252,7 +252,7 @@ impl<'a> Parser<'a> {
     fn assignment_statement(&mut self) -> Result<Option<Statement>> {
         only_if!(id = self.pop_id_followed_by(Symbol::Equal));
         let rhs = self.expr()?;
-        Ok(Some(Statement::Assignment(id.to_string(), rhs)))
+        Ok(Some(Statement::Assignment(id, rhs)))
     }
 
     // --- Expressions ---
@@ -308,7 +308,7 @@ impl<'a> Parser<'a> {
     fn function_expr(&mut self) -> Result<Option<Expr>> {
         only_if!(param_id = self.pop_id_followed_by(Symbol::FatArrow));
         let rhs = self.expr()?;
-        Ok(Some(Expr::Func(param_id.to_string(), Box::new(rhs))))
+        Ok(Some(Expr::Func(param_id, Box::new(rhs))))
     }
 
     fn binop_expr(&mut self) -> Result<Option<Expr>> {
@@ -411,7 +411,7 @@ impl<'a> Parser<'a> {
         let mut rest = self.repeat(Self::pattern_atom)?;
         rest.insert(0, param_1);
         Ok(Some(Pattern::Label {
-            name: label_id.to_string(),
+            name: label_id,
             parameter_patterns: rest,
         }))
     }
@@ -443,11 +443,11 @@ impl<'a> Parser<'a> {
         let is_label = id.chars().next().is_some_and(char::is_uppercase);
         Ok(Some(if is_label {
             Pattern::Label {
-                name: id.to_string(),
+                name: id,
                 parameter_patterns: vec![],
             }
         } else {
-            Pattern::Var(id.to_string())
+            Pattern::Var(id)
         }))
     }
 
@@ -534,8 +534,8 @@ mod tests {
         text = "module foo",
         program() = Program {
             module_decl: Some(ModuleDecl {
-                name: "foo".to_string(),
-                exports: vec![],
+                name: "foo".into(),
+                exporting: vec![],
             }),
             statements: vec![],
             return_expr: None,
@@ -549,8 +549,8 @@ mod tests {
         ",
         program() = Program {
             module_decl: Some(ModuleDecl {
-                name: "foo".to_string(),
-                exports: vec![],
+                name: "foo".into(),
+                exporting: vec![],
             }),
             statements: vec![],
             return_expr: None,
@@ -560,7 +560,7 @@ mod tests {
     parser_test! {
         name = variable_atom,
         text = "hello",
-        atom() = Some(Expr::Var("hello".to_string())),
+        atom() = Some(Expr::Var("hello".into())),
     }
 
     parser_test! {
@@ -576,18 +576,18 @@ mod tests {
         ",
         program() = Program {
             module_decl: Some(ModuleDecl {
-                name: "modmod".to_string(),
-                exports: vec!["hello".into(), "friend".into()],
+                name: "modmod".into(),
+                exporting: vec!["hello".into(), "friend".into()],
             }),
             statements: vec![
-                Statement::Assignment("hello".to_string(), Expr::Int(2)),
-                Statement::Print(Expr::Var("hello".to_string())),
+                Statement::Assignment("hello".into(), Expr::Int(2)),
+                Statement::Print(Expr::Var("hello".into())),
                 Statement::Assignment(
-                    "world".to_string(),
+                    "world".into(),
                     Expr::BinOp(Box::new(Expr::Int(1)), BinOp::Add, Box::new(Expr::Int(2)),),
                 ),
                 Statement::Assignment(
-                    "friend".to_string(),
+                    "friend".into(),
                     Expr::BinOp(
                         Box::new(Expr::BinOp(
                             Box::new(Expr::Int(1)),
@@ -611,8 +611,8 @@ mod tests {
         ",
         program() = Program {
             module_decl: None,
-            statements: vec![Statement::Assignment("hello".to_string(), Expr::Int(2))],
-            return_expr: Some(Expr::Var("hello".to_string())),
+            statements: vec![Statement::Assignment("hello".into(), Expr::Int(2))],
+            return_expr: Some(Expr::Var("hello".into())),
         },
     }
 

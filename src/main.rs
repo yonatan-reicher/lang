@@ -87,7 +87,7 @@ impl Default for ReplContext {
         let stdlib = c.add_stdlib();
         Statement::Import {
             module_name: "stdlib".into(),
-            imports: stdlib.module().values.keys().cloned().collect(),
+            exposing: stdlib.module().values.keys().cloned().collect(),
         }
         .execute(&mut c)
         .unwrap();

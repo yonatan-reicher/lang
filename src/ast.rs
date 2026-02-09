@@ -11,20 +11,18 @@ pub struct Program {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleDecl {
-    pub name: String,
-    // TODO: Rename to exporting?
-    // TODO: Why not `Vec<Rc<str>>`?
-    pub exports: Vec<String>,
+    pub name: Rc<str>,
+    pub exporting: Vec<Rc<str>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     /// `x = 42;`
-    Assignment(String, Expr),
+    Assignment(Rc<str>, Expr),
     /// `import module_name;` or `import module_name exposing (foo, bar);`
     Import {
-        module_name: String,
-        imports: Vec<String>,
+        module_name: Rc<str>,
+        exposing: Vec<Rc<str>>,
     },
     /// `print x;`
     Print(Expr),
@@ -32,8 +30,8 @@ pub enum Statement {
     /// label Cons head tail;
     /// ```
     Label {
-        name: String,
-        parameters: Vec<String>,
+        name: Rc<str>,
+        parameters: Vec<Rc<str>>,
     },
 }
 
@@ -46,11 +44,11 @@ pub enum Expr {
     Int(i64),
     #[from(Rc<str>, String, &str)]
     Str(Rc<str>),
-    Var(String),
+    Var(Rc<str>),
     #[from]
     BinOp(Box<Expr>, BinOp, Box<Expr>),
     /// An expression that introduces a function: `x => x + 1`
-    Func(String, Box<Expr>),
+    Func(Rc<str>, Box<Expr>),
     /// A function application: `f 42`
     /// Note: The vector (should) always contain at least two elements.
     /// The first element is the function being applied.
@@ -70,10 +68,10 @@ pub struct MatchArm(pub Pattern, pub Expr);
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
     Label {
-        name: String,
+        name: Rc<str>,
         parameter_patterns: Vec<Pattern>,
     },
-    Var(String),
+    Var(Rc<str>),
     Wildcard,
 }
 

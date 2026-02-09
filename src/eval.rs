@@ -161,7 +161,7 @@ pub enum BinOpError {
 #[derive(Clone, Debug, Error)]
 pub enum Error {
     #[error("the variable '{name}' does not exist")]
-    VariableNotFound { name: String },
+    VariableNotFound { name: Rc<str> },
     #[error("'{func}' is not a function, but is being used as one")]
     NotAFunction { func: Value },
     #[error("{0}")]
@@ -171,7 +171,7 @@ pub enum Error {
     #[error("division by zero - tried dividing '{lhs}' by '0'")]
     DivisionByZero { lhs: Value },
     #[error("label '{name}' does not exist, but used in a pattern")]
-    LabelPatternNoSuchLabel { name: String },
+    LabelPatternNoSuchLabel { name: Rc<str> },
     #[error("label '{label}' has {} arguments, but used in a pattern with {args} arguments", label.params.len())]
     LabelPatternWrongNumberOfArguments { label: Label, args: usize },
     #[error("no match arm matched the value '{0}'")]
@@ -311,7 +311,7 @@ impl Pattern {
     /// for resolving labels and things. The result is either an error, or a
     /// match or not. If matches, the results are not added directly added to
     /// the context, but returned to be added by the caller.
-    pub fn matches(&self, x: &Value, _context: &Context) -> Result<Option<HashMap<String, Value>>> {
+    pub fn matches(&self, x: &Value, _context: &Context) -> Result<Option<HashMap<Rc<str>, Value>>> {
         match self {
             Pattern::Label {
                 name,
@@ -354,11 +354,11 @@ mod tests {
     #[test]
     fn getting_a_variable() {
         let context = Context {
-            vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
+            vars: [("x".into(), Value::Int(42))].into_iter().collect(),
             out: PrintOutput::Ignore,
             modules: Default::default(),
         };
-        let expr = Expr::Var("x".to_string());
+        let expr = Expr::Var("x".into());
         assert_eq!(expr.eval(&context).unwrap(), Value::Int(42));
     }
 }

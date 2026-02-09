@@ -73,9 +73,9 @@ impl ast::Expr {
             ast::Expr::Str(_) => Ok(Type::Str),
             ast::Expr::Var(s) => c
                 .vars
-                .get(s.as_str())
+                .get(s)
                 .cloned()
-                .ok_or_else(|| Error::UnknownVariable(Rc::from(s.as_str()))),
+                .ok_or_else(|| Error::UnknownVariable(s.clone())),
             ast::Expr::BinOp(lhs, bin_op, rhs) => {
                 let lhs = lhs.infer(c)?;
                 let rhs = rhs.infer(c)?;
@@ -99,15 +99,14 @@ impl ast::Expr {
             }
             ast::Expr::Func(param, expr) => {
                 let t = Type::Int; // TODO
-                let param: Rc<str> = param.as_str().into();
                 let old = c.vars.insert(param.clone(), t.clone());
                 let rhs = expr.infer(c)?;
                 match old {
                     Some(old) => {
-                        c.vars.insert(param, old);
+                        c.vars.insert(param.clone(), old);
                     }
                     None => {
-                        c.vars.remove(&param);
+                        c.vars.remove(param);
                     }
                 }
                 Ok(Type::Func(Rc::new((t, rhs))))
@@ -177,23 +176,21 @@ impl ast::Statement {
         match self {
             ast::Statement::Assignment(name, expr) => {
                 let expr_type = expr.infer(c)?;
-                c.add_var(name.as_str().into(), expr_type);
+                c.add_var(name.clone(), expr_type);
             }
             ast::Statement::Print(_) => (),
             ast::Statement::Import {
                 module_name,
-                imports,
+                exposing: imports,
             } => {
-                let module_name: Rc<str> = module_name.as_str().into();
-                let Some(module) = c.modules.get(&module_name) else {
-                    return Err(Error::NoModule { name: module_name });
+                let Some(module) = c.modules.get(module_name) else {
+                    return Err(Error::NoModule { name: module_name.clone() });
                 };
                 for item_name in imports {
-                    let item_name: Rc<str> = item_name.as_str().into();
-                    let Some(t) = module.items.get(&item_name) else {
+                    let Some(t) = module.items.get(item_name) else {
                         return Err(Error::NoModuleItem {
-                            module: module_name,
-                            item: item_name,
+                            module: module_name.clone(),
+                            item: item_name.clone(),
                         });
                     };
                     c.vars.insert(item_name.clone(), t.clone());
@@ -208,7 +205,7 @@ impl ast::Statement {
 impl ast::Pattern {
     pub fn infer(&self, input: &Type) -> Result<Vec<(Rc<str>, Type)>> {
         Ok(match self {
-            ast::Pattern::Var(id) => vec![(Rc::from(id.as_str()), input.clone())],
+            ast::Pattern::Var(id) => vec![(id.clone(), input.clone())],
             ast::Pattern::Wildcard => vec![],
             ast::Pattern::Label { .. } => todo!(),
         })

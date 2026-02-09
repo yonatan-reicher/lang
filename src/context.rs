@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::value::Value;
 
@@ -22,12 +23,12 @@ impl PrintOutput {
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Module {
-    pub values: HashMap<String, Value>,
+    pub values: HashMap<Rc<str>, Value>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Context {
-    pub vars: HashMap<String, Value>,
-    pub modules: HashMap<String, Module>,
+    pub vars: HashMap<Rc<str>, Value>,
+    pub modules: HashMap<Rc<str>, Module>,
     pub out: PrintOutput,
 }

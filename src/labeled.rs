@@ -82,6 +82,6 @@ impl Label {
 #[derive(Clone, Debug, Display, PartialEq, Eq)]
 #[display("{name} of {params:?}")]
 pub struct LabelInfo {
-    pub name: String,
-    pub params: Vec<String>,
+    pub name: Rc<str>,
+    pub params: Vec<Rc<str>>,
 }

@@ -54,12 +54,12 @@ fn test_label() {
     let ValueRef::Labeled(labeled) = stdout[0].as_ref() else {
         panic!()
     };
-    assert_eq!(labeled.label().name, "Cons");
+    assert_eq!(labeled.label().name, "Cons".into());
     assert_eq!(labeled.args()[0], 2.into());
     let ValueRef::Labeled(labeled) = labeled.args()[1].as_ref() else {
         panic!()
     };
-    assert_eq!(labeled.label().name, "Nil");
+    assert_eq!(labeled.label().name, "Nil".into());
     assert_eq!(labeled.args(), &vec![]);
 }
 
@@ -74,13 +74,13 @@ fn test_print() {
     let ValueRef::Labeled(x) = stdout[0].as_ref() else {
         panic!()
     };
-    assert_eq!(x.label().name, "Print");
+    assert_eq!(x.label().name, "Print".into());
     assert_eq!(x.args()[0], 2.into());
     let ValueRef::Labeled(x) = x.args()[1].as_ref() else {
         dbg!(&x.args()[1]);
         panic!()
     };
-    assert_eq!(x.label().name, "None");
+    assert_eq!(x.label().name, "None".into());
     assert_eq!(x.args(), &vec![]);
 }
 
@@ -155,6 +155,6 @@ fn complex_syntax() {
         panic!()
     };
 
-    assert_eq!(x.label().name, "IsDir");
+    assert_eq!(x.label().name, "IsDir".into());
     assert_eq!(x.args().len(), 2);
 }

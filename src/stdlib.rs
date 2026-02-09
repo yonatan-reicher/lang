@@ -145,7 +145,7 @@ impl Stdlib {
         let io_commands = IoCommands {
             input: Label::new(LabelInfo {
                 name: "Input".into(),
-                params: vec!["f".to_string()],
+                params: vec!["f".into()],
             }),
             ls: Label::new(LabelInfo {
                 name: "Ls".into(),
@@ -157,19 +157,19 @@ impl Stdlib {
             }),
             print: Label::new(LabelInfo {
                 name: "Print".into(),
-                params: vec!["value".to_string(), "next".to_string()],
+                params: vec!["value".into(), "next".into()],
             }),
             read: Label::new(LabelInfo {
                 name: "Read".into(),
-                params: vec!["path".to_string(), "f".into()],
+                params: vec!["path".into(), "f".into()],
             }),
             write: Label::new(LabelInfo {
                 name: "Write".into(),
-                params: vec!["path".to_string(), "text".into(), "next".into()],
+                params: vec!["path".into(), "text".into(), "next".into()],
             }),
             is_dir: Label::new(LabelInfo {
                 name: "IsDir".into(),
-                params: vec!["path".to_string(), "f".into()],
+                params: vec!["path".into(), "f".into()],
             }),
         };
 
@@ -268,7 +268,7 @@ impl Default for Stdlib {
 impl Context {
     pub fn add_stdlib(&mut self) -> Stdlib {
         let stdlib = Stdlib::new();
-        self.modules.insert("stdlib".to_string(), stdlib.module());
+        self.modules.insert(Rc::from("stdlib"), stdlib.module());
         stdlib
     }
 }

@@ -57,7 +57,7 @@ where
 #[derive(Clone, Debug, Display, PartialEq)]
 #[display("({param_name} => ...)")]
 pub struct LambdaFunc {
-    pub param_name: String,
+    pub param_name: Rc<str>,
     pub closure: crate::context::Context,
     pub body: crate::ast::Expr,
 }
@@ -101,7 +101,7 @@ impl<L: Into<Label>> From<L> for LabelFunc {
 #[derive(Clone, Debug, Display)]
 #[display("{name}")]
 pub struct BuiltinDefinition {
-    pub name: String,
+    pub name: Rc<str>,
     pub arity: u8,
     #[debug("{func:p}")]
     #[allow(clippy::type_complexity)]

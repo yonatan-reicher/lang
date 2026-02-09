@@ -17,7 +17,7 @@ impl Statement {
             }
             Statement::Import {
                 module_name,
-                imports,
+                exposing: imports,
             } => {
                 let Some(module) = context.modules.get(module_name) else {
                     panic!("No module '{module_name}'");
@@ -67,12 +67,12 @@ mod tests {
 
     #[test]
     fn statments() {
-        let s1 = Statement::Assignment("x".to_string(), Expr::Int(100));
-        let s2 = Statement::Print(Expr::Var("x".to_string()));
+        let s1 = Statement::Assignment("x".into(), Expr::Int(100));
+        let s2 = Statement::Print(Expr::Var("x".into()));
 
         let out = Default::default();
         let mut context = Context {
-            vars: [("x".to_string(), Value::Int(42))].into_iter().collect(),
+            vars: [("x".into(), Value::Int(42))].into(),
             out: PrintOutput::Vec(std::rc::Rc::clone(&out)),
             modules: [].into(),
         };
@@ -92,14 +92,14 @@ mod tests {
         let program = Program {
             module_decl: None,
             statements: vec![
-                Assignment("x".to_string(), Int(10)),
-                Assignment("y".to_string(), Str("10".into())),
+                Assignment("x".into(), Int(10)),
+                Assignment("y".into(), Str("10".into())),
                 Assignment(
-                    "x".to_string(),
+                    "x".into(),
                     BinOp(
                         BinOp(Var("x".into()).into(), Eq, Var("y".into()).into()).into(),
                         And,
-                        Var("x".to_string()).into(),
+                        Var("x".into()).into(),
                     ),
                 ),
             ],
