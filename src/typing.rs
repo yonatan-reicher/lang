@@ -18,6 +18,8 @@ pub enum Error {
         lhs: Type,
         rhs: Type,
     },
+    #[error("a value of type '{0}' was applied like a function, but it is not one")]
+    NotAFunction(Type),
 }
 
 type Result<T = Type, E = Error> = std::result::Result<T, E>;
@@ -120,7 +122,9 @@ impl ast::Expr {
                 let mut lhs_type = &types[0];
                 let arg_types = &types[1..];
                 for arg_type in arg_types {
-                    let Type::Func(f) = lhs_type else { todo!() };
+                    let Type::Func(f) = lhs_type else {
+                        return Err(Error::NotAFunction(lhs_type.clone()));
+                    };
                     let (param_type, rhs_type) = f.as_ref();
                     if param_type != arg_type {
                         todo!()
@@ -184,7 +188,9 @@ impl ast::Statement {
                 exposing: imports,
             } => {
                 let Some(module) = c.modules.get(module_name) else {
-                    return Err(Error::NoModule { name: module_name.clone() });
+                    return Err(Error::NoModule {
+                        name: module_name.clone(),
+                    });
                 };
                 for item_name in imports {
                     let Some(t) = module.items.get(item_name) else {
