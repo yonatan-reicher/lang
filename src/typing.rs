@@ -12,6 +12,12 @@ pub enum Error {
     NoModule { name: Rc<str> },
     #[error("module '{module}' does not contain an item '{item}'")]
     NoModuleItem { module: Rc<str>, item: Rc<str> },
+    #[error("operator '{op}' cannot be used on '{lhs}' and '{rhs}'")]
+    BadOperator {
+        op: ast::BinOp,
+        lhs: Type,
+        rhs: Type,
+    },
 }
 
 type Result<T = Type, E = Error> = std::result::Result<T, E>;
@@ -82,7 +88,11 @@ impl ast::Expr {
                     // bool
                     (And | Or, Type::Bool, Type::Bool) => Ok(Type::Bool),
                     // error
-                    _ => todo!("bad op typing"),
+                    (bin_op, lhs, rhs) => Err(Error::BadOperator {
+                        op: *bin_op,
+                        lhs,
+                        rhs,
+                    }),
                 }
             }
             ast::Expr::Func(_, expr) => todo!(),
