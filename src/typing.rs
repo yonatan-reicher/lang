@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::ast;
+use crate::{ast, labeled::{Label, LabelInfo}};
 use derive_more::Display;
 use thiserror::Error;
 
@@ -44,17 +44,26 @@ pub enum Type {
     Str,
     #[display("({} -> {})", _0.0, _0.1)]
     Func(Rc<(Type, Type)>),
+    #[display("{_0}")]
+    Labeled(Rc<Label>),
 }
 
+// #[derive(Clone, Debug, Display, derive_more::From, PartialEq, Eq)]
+// pub enum Item {
+//     Type(Type),
+//     Label(Label),
+// }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Module {
-    items: HashMap<Rc<str>, Type>,
+    vars: HashMap<Rc<str>, Type>,
+    labels: HashMap<Rc<str>, Label>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Context {
     modules: HashMap<Rc<str>, Module>,
     vars: HashMap<Rc<str>, Type>,
+    labels: HashMap<Rc<str>, Label>,
 }
 
 impl Context {
@@ -203,16 +212,36 @@ impl ast::Statement {
                     });
                 };
                 for item_name in imports {
-                    let Some(t) = module.items.get(item_name) else {
+                    let mut found = false;
+                    if let Some(t) = module.vars.get(item_name) {
+                        c.vars.insert(item_name.clone(), t.clone());
+                        found = true;
+                    }
+                    if let Some(l) = module.labels.get(item_name) {
+                        c.labels.insert(item_name.clone(), l.clone());
+                        found = true;
+                    }
+                    if !found {
                         return Err(Error::NoModuleItem {
                             module: module_name.clone(),
                             item: item_name.clone(),
                         });
                     };
-                    c.vars.insert(item_name.clone(), t.clone());
                 }
             }
-            ast::Statement::Label { .. } => todo!(),
+            ast::Statement::Label { name, parameters  } => {
+                let l = Label::new(LabelInfo {
+                    name: name.clone(),
+                    params: parameters.clone(),
+                });
+                c.labels.insert(name.clone(), l.clone());
+                let param_types = parameters.iter()
+                    .map(|_| Type::Int) // TODO
+                    .collect::<Vec<_>>();
+                // Make the function that should be added to the context
+                let return_type = Type::Labeled(l);
+                c.vars.insert(name.clone(), .clone());
+            }
         }
         Ok(())
     }
