@@ -20,6 +20,16 @@ pub enum Error {
     },
     #[error("a value of type '{0}' was applied like a function, but it is not one")]
     NotAFunction(Type),
+    #[error("argument of type '{arg}' cannot be applied to function of type '{func}'")]
+    ArgumentMismatch { func: Type, arg: Type },
+    #[error("incompatible match arms {0:?}")]
+    IncompatibleMatchArms(Vec<Type>),
+    #[error("empty match")]
+    EmptyMatch,
+    #[error("if condition must be Bool, but was '{0}'")]
+    IfConditionWasNotBool(Type),
+    #[error("if arms had incompatible types '{0}' and '{1}'")]
+    IncompatibleIfArms(Type, Type),
 }
 
 type Result<T = Type, E = Error> = std::result::Result<T, E>;
@@ -127,7 +137,10 @@ impl ast::Expr {
                     };
                     let (param_type, rhs_type) = f.as_ref();
                     if param_type != arg_type {
-                        todo!()
+                        return Err(Error::ArgumentMismatch {
+                            func: lhs_type.clone(),
+                            arg: arg_type.clone(),
+                        });
                     }
                     lhs_type = rhs_type
                 }
@@ -135,21 +148,18 @@ impl ast::Expr {
             }
             ast::Expr::Match(input, arms) => {
                 let input_type = input.infer(c)?;
-                let mut ret = None;
+                let mut ret_types = vec![];
                 for ast::MatchArm(p, e) in arms {
                     let vars = p.infer(&input_type)?;
                     let c = &mut c.clone();
-                    for (v, t) in vars {
-                        c.vars.insert(v, t);
-                    }
-                    let t = e.infer(c)?;
-                    match &ret {
-                        None => ret = Some(t),
-                        Some(ret) if t == *ret => (),
-                        Some(_) => todo!(),
-                    }
+                    c.vars.extend(vars);
+                    ret_types.push(e.infer(c)?);
                 }
-                Ok(ret.unwrap())
+                match ret_types.into() {
+                    ZeroOneMore::Zero => Err(Error::EmptyMatch),
+                    ZeroOneMore::One(t) => Ok(t),
+                    ZeroOneMore::More(t) => Err(Error::IncompatibleMatchArms(t)),
+                }
             }
             ast::Expr::Statements(statements, expr) => {
                 let c = &mut c.clone();
@@ -162,12 +172,12 @@ impl ast::Expr {
                 let (cond, x, y) = e.as_ref();
                 let cond_type = cond.infer(c)?;
                 if cond_type != Type::Bool {
-                    todo!()
+                    return Err(Error::IfConditionWasNotBool(cond_type));
                 }
                 let x_type = x.infer(c)?;
                 let y_type = y.infer(c)?;
                 if x_type != y_type {
-                    todo!()
+                    return Err(Error::IncompatibleIfArms(x_type, y_type));
                 }
                 Ok(x_type)
             }
@@ -226,6 +236,22 @@ impl ast::Program {
         }
         let t = self.return_expr.as_ref().map(|x| x.infer(c)).transpose()?;
         Ok(t)
+    }
+}
+
+enum ZeroOneMore<T> {
+    Zero,
+    One(T),
+    More(Vec<T>),
+}
+
+impl<T> From<Vec<T>> for ZeroOneMore<T> {
+    fn from(mut v: Vec<T>) -> Self {
+        match v.len() {
+            0 => Self::Zero,
+            1 => Self::One(v.pop().unwrap()),
+            2.. => Self::More(v),
+        }
     }
 }
 
