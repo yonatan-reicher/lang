@@ -22,13 +22,13 @@ const USAGE: &str = indoc! {r"
 
 #[derive(Debug, Error)]
 enum Error {
-    #[error("{0}")]
+    #[error("command error: {0}")]
     IoCommand(#[from] lang::io_commands::Error),
-    #[error("{0}")]
+    #[error("run-time error: {0}")]
     Eval(#[from] lang::eval::Error),
-    #[error("{0}")]
+    #[error("generic error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("{0}")]
+    #[error("type-checking error: {0}")]
     Type(#[from] lang::typing::Error),
     // #[error("{0}")]
     // Parse(#[from] lang::parse::Error),
