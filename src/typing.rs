@@ -58,15 +58,15 @@ pub enum Type {
 // }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Module {
-    vars: HashMap<Rc<str>, Type>,
-    labels: HashMap<Rc<str>, Label>,
+    pub vars: HashMap<Rc<str>, Type>,
+    pub labels: HashMap<Rc<str>, Label>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Context {
-    modules: HashMap<Rc<str>, Module>,
-    vars: HashMap<Rc<str>, Type>,
-    labels: HashMap<Rc<str>, Label>,
+    pub modules: HashMap<Rc<str>, Module>,
+    pub vars: HashMap<Rc<str>, Type>,
+    pub labels: HashMap<Rc<str>, Label>,
 }
 
 impl Context {
