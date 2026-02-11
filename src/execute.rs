@@ -54,7 +54,10 @@ impl Program {
         for statement in &self.statements {
             statement.execute(context)?;
         }
-        self.return_expr.clone().map(|e| e.eval(context)).transpose()
+        self.return_expr
+            .clone()
+            .map(|e| e.eval(context))
+            .transpose()
     }
 }
 
