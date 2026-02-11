@@ -83,19 +83,20 @@ struct ReplContext {
 
 impl Default for ReplContext {
     fn default() -> Self {
-        let mut c = Context::default();
-        let stdlib = c.add_stdlib();
-        Statement::Import {
+        let mut run_context = Context::default();
+        let mut type_context = lang::typing::Context::default();
+        // Attach the standard library to both contexts.
+        let stdlib = lang::stdlib::Stdlib::new();
+        stdlib.attach(&mut run_context);
+        stdlib.attach(&mut type_context);
+        // Import it all of it, so that we can use it without a prefix.
+        let import = Statement::Import {
             module_name: "stdlib".into(),
             exposing: stdlib.module().values.keys().cloned().collect(),
-        }
-        .execute(&mut c)
-        .unwrap();
-        // TODO: Actually add the stdlib to the typing context
-        Self {
-            run_context: c,
-            type_context: Default::default(),
-        }
+        };
+        import.execute(&mut run_context).unwrap();
+        import.infer(&mut type_context).unwrap();
+        Self { run_context, type_context }
     }
 }
 
@@ -125,7 +126,8 @@ fn run_repl_line(line: &str, c: &mut ReplContext) -> Result<()> {
 
 fn run_text(text: &str) -> Result<()> {
     let mut context = Context::default();
-    let stdlib = context.add_stdlib();
+    let stdlib = lang::stdlib::Stdlib::new();
+    stdlib.attach(&mut context);
     let program = parse(text.as_bytes())?;
     let Some(ret) = program.execute(&mut context)? else {
         eprintln!("This program does not return a value");
@@ -140,7 +142,7 @@ fn log_error<T, E: std::fmt::Display>(res: Result<T, E>) -> Option<T> {
     match res {
         Ok(value) => Some(value),
         Err(err) => {
-            eprintln!("Error: {err}");
+            eprintln!("{err}");
             None
         }
     }

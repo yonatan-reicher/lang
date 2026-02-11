@@ -79,7 +79,7 @@ mod tests {
             out: PrintOutput::Vec(std::rc::Rc::clone(&out)),
             modules: [].into(),
         };
-        context.add_stdlib();
+        crate::stdlib::Stdlib::new().attach(&mut context);
 
         s1.execute(&mut context).unwrap(); // x = 100;
         s2.execute(&mut context).unwrap(); // print x;

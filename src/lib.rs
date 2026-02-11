@@ -31,6 +31,8 @@ pub use lex::lex;
 pub use token::*;
 pub use position::Position;
 
+use crate::stdlib::Stdlib;
+
 /// This function returns a vector of values that were printed during execution.
 /// The RETURN VALUE of the program is IGNORED.
 pub fn execute_string<'text>(
@@ -42,7 +44,7 @@ pub fn execute_string<'text>(
         out: context::PrintOutput::Vec(std::rc::Rc::clone(&out)),
         modules: [].into(),
     };
-    context.add_stdlib();
+    Stdlib::new().attach(&mut context);
     let ast = parse::parse(source_code.as_bytes())?;
     ast.execute(&mut context)?;
     let vec = std::mem::take(out.borrow_mut().as_mut());

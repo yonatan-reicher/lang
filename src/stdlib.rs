@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use functionality::prelude::*;
 
-use crate::context::{Context, Module};
+use crate::context::Module;
 use crate::labeled::{Label, LabelInfo, Labeled};
 use crate::value::{BuiltinDefinition, Func, LabelFunc, Value};
 
@@ -257,6 +257,11 @@ impl Stdlib {
             .into()
         })
     }
+
+    pub fn attach(&self, context: &mut impl InsertModule)
+    { 
+        context.insert_module(Rc::from("stdlib"), self.module());
+    }
 }
 
 impl Default for Stdlib {
@@ -265,10 +270,25 @@ impl Default for Stdlib {
     }
 }
 
-impl Context {
-    pub fn add_stdlib(&mut self) -> Stdlib {
-        let stdlib = Stdlib::new();
-        self.modules.insert(Rc::from("stdlib"), stdlib.module());
-        stdlib
+pub trait InsertModule {
+    fn insert_module(&mut self, name: Rc<str>, module: Module);
+}
+
+impl InsertModule for crate::context::Context {
+    fn insert_module(&mut self, name: Rc<str>, module: Module) {
+        self.modules.insert(name, module);
+    }
+}
+
+impl InsertModule for crate::typing::Context {
+    fn insert_module(&mut self, name: Rc<str>, module: Module) {
+        let mut m = crate::typing::Module::default();
+        for (value_name, value) in module.values {
+            m.vars.insert(value_name, crate::typing::Type::Int);
+            if let Some((l, _)) = value.unlabel() {
+                m.labels.insert(l.name.clone(), l.clone());
+            }
+        }
+        self.modules.insert(name, m);
     }
 }
