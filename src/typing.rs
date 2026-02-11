@@ -1,6 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{ast, labeled::{Label, LabelInfo}};
+use crate::{
+    ast,
+    labeled::{Label, LabelInfo},
+};
 use derive_more::Display;
 use thiserror::Error;
 
@@ -45,7 +48,7 @@ pub enum Type {
     #[display("({} -> {})", _0.0, _0.1)]
     Func(Rc<(Type, Type)>),
     #[display("{_0}")]
-    Labeled(Rc<Label>),
+    Labeled(Label),
 }
 
 // #[derive(Clone, Debug, Display, derive_more::From, PartialEq, Eq)]
@@ -229,18 +232,23 @@ impl ast::Statement {
                     };
                 }
             }
-            ast::Statement::Label { name, parameters  } => {
+            ast::Statement::Label { name, parameters } => {
+                // Make the new label that is added to the context.
                 let l = Label::new(LabelInfo {
                     name: name.clone(),
                     params: parameters.clone(),
                 });
                 c.labels.insert(name.clone(), l.clone());
-                let param_types = parameters.iter()
+                // Make the function that should be added to the context
+                let param_types = parameters
+                    .iter()
                     .map(|_| Type::Int) // TODO
                     .collect::<Vec<_>>();
-                // Make the function that should be added to the context
-                let return_type = Type::Labeled(l);
-                c.vars.insert(name.clone(), .clone());
+                let mut func_type = Type::Labeled(l);
+                for param_type in param_types.iter().rev() {
+                    func_type = Type::Func(Rc::new((param_type.clone(), func_type)));
+                }
+                c.vars.insert(name.clone(), func_type.clone());
             }
         }
         Ok(())
