@@ -1,8 +1,8 @@
 use crate::ast::{Program, Statement};
 use crate::context::Context;
+use crate::eval;
 use crate::labeled::{Label, LabelInfo, Labeled};
 use crate::value::{LabelFunc, Value};
-use crate::eval;
 
 impl Statement {
     pub fn execute(&self, context: &mut Context) -> eval::Result<()> {
